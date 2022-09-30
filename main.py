@@ -20,7 +20,7 @@ class Color(SimpleNamespace):
     END    = '#dc2626'
     GRID   = '#d4d4d4'
     CURSOR = '#000000'
-    LINE   = '#db2777'
+    LINE   = '#facc15'
 
 WIDTH      = 800
 HEIGHT     = 600
@@ -142,6 +142,9 @@ def render():
     # Draw the computed path
     for line in lines:
         canvas.create_line(line, fill=Color.LINE, width=LINE_WIDTH)
+        pos1, pos2 = line
+        draw_dot(pos1, Color.LINE)
+        draw_dot(pos2, Color.LINE)
 
     # Place the start and end dots
     global start_pos, end_pos
@@ -252,7 +255,7 @@ def attach_events():
     points_edit.bind('<Button-1>', edit_points)
 
 
-# Start window ################################################################
+# Entrypoint ##################################################################
 
 def main():
     window = build_widgets()
