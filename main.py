@@ -7,7 +7,6 @@ from math import sqrt, floor, ceil
 from enum import Enum
 from types import SimpleNamespace
 
-window = tk.Tk(className="pathfinding")
 
 # Configurations ##############################################################
 
@@ -34,10 +33,6 @@ LINE_WIDTH = 3
 MAP_WIDTH  = WIDTH // TILE_SIZE
 MAP_HEIGHT = HEIGHT // TILE_SIZE
 
-NORMAL_FONT = font.Font(size=FONT_SIZE, weight='normal')
-BOLD_FONT   = font.Font(size=FONT_SIZE, weight='bold')
-
-
 # Mutable states ##############################################################
 
 start_pos = ()
@@ -48,66 +43,68 @@ state = State.IDLE
 
 # Tkinter widgets #############################################################
 
-# Layout:
-# window
-#  └──root
-#      ├── config_menu
-#      │    ├── map_menu
-#      │    │    ├── map_name
-#      │    │    ├── map_save
-#      │    │    ├── map_load
-#      │    │    ... (not implemented)
-#      │    └── points_menu
-#      │         ├── points_edit
-#      │         ├── start_label
-#      │         └── end_label
-#      ├── canvas
-#      └── result_menu
-#           ├── distance_label
-#           └── time_label
+def build_widgets():
+    window = tk.Tk(className="pathfinding")
+    window.wm_title("Pathfinding")
+    window.wm_resizable(False, False)
 
-root = tk.Frame(window)
-root.pack(padx=PADDING, pady=PADDING)
+    global NORMAL_FONT, BOLD_FONT
+    NORMAL_FONT = font.Font(size=FONT_SIZE, weight='normal')
+    BOLD_FONT   = font.Font(size=FONT_SIZE, weight='bold')
 
-config_menu = tk.Frame(root)
-config_menu.pack(padx=PADDING, pady=PADDING, fill='x')
+    root = tk.Frame(window)
+    root.pack(padx=PADDING, pady=PADDING)
 
-map_menu = tk.Frame(config_menu)
-map_menu.pack(side=tk.LEFT, expand=1, anchor='w')
+    config_menu = tk.Frame(root)
+    config_menu.pack(padx=PADDING, pady=PADDING, fill='x')
 
-map_name = tk.Entry(map_menu)
-map_name.pack(side=tk.LEFT, padx=PADDING)
+    map_menu = tk.Frame(config_menu)
+    map_menu.pack(side=tk.LEFT, expand=1, anchor='w')
 
-map_save = tk.Button(map_menu, text='Save', font=NORMAL_FONT)
-map_save.pack(side=tk.LEFT, padx=PADDING)
+    global map_name
+    map_name = tk.Entry(map_menu)
+    map_name.pack(side=tk.LEFT, padx=PADDING)
 
-map_load = tk.Button(map_menu, text='Load', font=NORMAL_FONT)
-map_load.pack(side=tk.LEFT, padx=PADDING)
+    global map_save
+    map_save = tk.Button(map_menu, text='Save', font=NORMAL_FONT)
+    map_save.pack(side=tk.LEFT, padx=PADDING)
 
-points_menu = tk.Frame(config_menu)
-points_menu.pack(side=tk.LEFT, expand=1, anchor='e')
+    global map_load
+    map_load = tk.Button(map_menu, text='Load', font=NORMAL_FONT)
+    map_load.pack(side=tk.LEFT, padx=PADDING)
 
-points_edit = tk.Button(points_menu, text="Edit", font=NORMAL_FONT)
-points_edit.pack(side=tk.LEFT, padx=PADDING)
+    points_menu = tk.Frame(config_menu)
+    points_menu.pack(side=tk.LEFT, expand=1, anchor='e')
 
-start_label = tk.Label(points_menu, text="start = {...; ...}", font=NORMAL_FONT)
-start_label.pack(side=tk.LEFT, padx=PADDING)
+    global points_edit
+    points_edit = tk.Button(points_menu, text="Edit", font=NORMAL_FONT)
+    points_edit.pack(side=tk.LEFT, padx=PADDING)
 
-end_label = tk.Label(points_menu, text="end = {...; ...}", font=NORMAL_FONT)
-end_label.pack(side=tk.LEFT, padx=PADDING)
+    global start_label
+    start_label = tk.Label(points_menu, text="start = {...; ...}", font=NORMAL_FONT)
+    start_label.pack(side=tk.LEFT, padx=PADDING)
 
-canvas = tk.Canvas(root, bg="#ffffff", width=WIDTH, height=HEIGHT)
-canvas.config(cursor='none')
-canvas.pack(padx=PADDING, pady=PADDING)
+    global end_label
+    end_label = tk.Label(points_menu, text="end = {...; ...}", font=NORMAL_FONT)
+    end_label.pack(side=tk.LEFT, padx=PADDING)
 
-result_menu = tk.Frame(root)
-result_menu.pack(padx=PADDING, pady=PADDING, side=tk.LEFT, anchor='w')
+    global canvas
+    canvas = tk.Canvas(root, bg="#ffffff", width=WIDTH, height=HEIGHT)
+    canvas.config(cursor='none')
+    canvas.pack(padx=PADDING, pady=PADDING)
 
-distance_label = tk.Label(result_menu, text="Distance: ...", font=NORMAL_FONT)
-distance_label.pack(side=tk.LEFT, padx=PADDING)
+    result_menu = tk.Frame(root)
+    result_menu.pack(padx=PADDING, pady=PADDING, side=tk.LEFT, anchor='w')
 
-time_label = tk.Label(result_menu, text="Time: ...", font=NORMAL_FONT)
-time_label.pack(side=tk.LEFT, padx=PADDING)
+    global distance_label
+    distance_label = tk.Label(result_menu, text="Distance: ...", font=NORMAL_FONT)
+    distance_label.pack(side=tk.LEFT, padx=PADDING)
+
+    global time_label
+    time_label = tk.Label(result_menu, text="Time: ...", font=NORMAL_FONT)
+    time_label.pack(side=tk.LEFT, padx=PADDING)
+
+    return window
 
 
 # Rendering ###################################################################
@@ -235,7 +232,7 @@ def canvas_click(e):
     draw_cursor(e.x, e.y)
 
 
-def edit_points(e):
+def edit_points(_):
     global start_pos, end_pos, state, lines
     if state == State.IDLE:
         start_pos = ()
@@ -249,13 +246,18 @@ def edit_points(e):
         time_label.config(text="Time: ...")
         state = State.EDIT_START
 
-canvas.bind('<Motion>', canvas_motion)
-canvas.bind('<Button-1>', canvas_click)
-points_edit.bind('<Button-1>', edit_points)
+def attach_events():
+    canvas.bind('<Motion>', canvas_motion)
+    canvas.bind('<Button-1>', canvas_click)
+    points_edit.bind('<Button-1>', edit_points)
 
 
 # Start window ################################################################
 
-window.wm_title("Pathfinding")
-window.wm_resizable(False, False)
-window.mainloop()
+def main():
+    window = build_widgets()
+    attach_events()
+    window.mainloop()
+
+if __name__ == "__main__":
+    main()
