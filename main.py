@@ -37,7 +37,9 @@ MAP_HEIGHT = HEIGHT // TILE_SIZE
 
 start_pos = ()
 end_pos = ()
-lines = []
+result_path = []
+map = []
+
 state = State.IDLE
 
 
@@ -126,6 +128,16 @@ def align_point(x, y):
     return aligned_x, aligned_y
 
 
+def draw_lines(points, fill, width):
+    last = ()
+    for point in points:
+        if last:
+            canvas.create_line(last, point, fill=fill, width=width)
+
+        last = point
+
+
+
 def render():
     canvas.delete("all")
     # Draw the grid
@@ -140,11 +152,8 @@ def render():
     # TODO: Draw the map
 
     # Draw the computed path
-    for line in lines:
-        canvas.create_line(line, fill=Color.LINE, width=LINE_WIDTH)
-        pos1, pos2 = line
-        draw_dot(pos1, Color.LINE)
-        draw_dot(pos2, Color.LINE)
+
+    draw_lines(result_path, Color.LINE, LINE_WIDTH)
 
     # Place the start and end dots
     global start_pos, end_pos
@@ -180,17 +189,25 @@ def draw_cursor(x, y):
 
 def get_distance():
     dist = 0
-    for ((x1, y1), (x2, y2)) in lines:
-        dx = x1 - x2
-        dy = y1 - y2
-        dist += sqrt(dx * dx + dy * dy)
+    last_x, last_y = None, None
+
+    for (x, y) in result_path:
+        if last_x and last_y:
+            dx = x - last_x 
+            dy = y - last_y
+            dist += sqrt(dx * dx + dy * dy)
+
+        last_x = x
+        last_y = y
     return dist / TILE_SIZE
         
 
 def pathfind():
-    global lines
+    global result_path
     start_time = time()
-    lines = [(start_pos, end_pos)]
+    if not start_pos or not end_pos:
+        return
+    result_path = [start_pos, end_pos]
     distance = get_distance()
     end_time = time()
     elapsed_time = (end_time - start_time) * 1000
@@ -236,11 +253,11 @@ def canvas_click(e):
 
 
 def edit_points(_):
-    global start_pos, end_pos, state, lines
+    global start_pos, end_pos, state, result_path
     if state == State.IDLE:
         start_pos = ()
         end_pos = ()
-        lines = []
+        result_path = []
         render()
         start_label.config(text="start = {...; ...}", font=BOLD_FONT)
         end_label.config(text="end = {...; ...}")
