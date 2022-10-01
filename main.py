@@ -4,6 +4,8 @@ from tkinter import font
 from time import time
 from math import sqrt, floor, ceil
 
+from os import path, mkdir
+
 from enum import Enum
 from types import SimpleNamespace
 
@@ -14,13 +16,16 @@ class State(Enum):
     IDLE = 0
     EDIT_START = 1
     EDIT_END = 2
+    EDIT_MAP = 3
 
 class Color(SimpleNamespace):
-    START  = '#16a34a'
-    END    = '#dc2626'
-    GRID   = '#d4d4d4'
-    CURSOR = '#000000'
-    LINE   = '#facc15'
+    START   = '#16a34a'
+    END     = '#dc2626'
+    GRID    = '#d4d4d4'
+    CURSOR  = '#000000'
+    LINE    = '#facc15'
+    MAP     = '#2563eb'
+    PREVIEW = '#475569'
 
 WIDTH      = 800
 HEIGHT     = 600
@@ -38,7 +43,7 @@ MAP_HEIGHT = HEIGHT // TILE_SIZE
 start_pos = ()
 end_pos = ()
 result_path = []
-map = []
+map = [] 
 
 state = State.IDLE
 
@@ -74,6 +79,10 @@ def build_widgets():
     global map_load
     map_load = tk.Button(map_menu, text='Load', font=NORMAL_FONT)
     map_load.pack(side=tk.LEFT, padx=PADDING)
+
+    global map_edit
+    map_edit = tk.Button(map_menu, text='Edit', font=NORMAL_FONT)
+    map_edit.pack(side=tk.LEFT, padx=PADDING)
 
     points_menu = tk.Frame(config_menu)
     points_menu.pack(side=tk.LEFT, expand=1, anchor='e')
@@ -137,7 +146,6 @@ def draw_lines(points, fill, width):
         last = point
 
 
-
 def render():
     canvas.delete("all")
     # Draw the grid
@@ -149,7 +157,7 @@ def render():
         canvas.create_line(0, i * TILE_SIZE, WIDTH, i * TILE_SIZE,
                            fill=Color.GRID)
 
-    # TODO: Draw the map
+    draw_lines(map, Color.MAP, LINE_WIDTH)
 
     # Draw the computed path
 
@@ -164,20 +172,34 @@ def render():
 
 
 def draw_cursor(x, y):
-    global state
     if state == State.IDLE:
         dot_color = Color.CURSOR
     elif state == State.EDIT_START:
         dot_color = Color.START
     elif state == State.EDIT_END:
         dot_color = Color.END
+    elif state == State.EDIT_MAP:
+        x_tiled = round(x / TILE_SIZE) * TILE_SIZE
+        y_tiled = round(y / TILE_SIZE) * TILE_SIZE
+        tiled_pos = (x_tiled, y_tiled)
+        dot_color = Color.PREVIEW
+        if map:
+            canvas.create_line(map[0], tiled_pos, fill=Color.PREVIEW,
+                               width=LINE_WIDTH)
+            canvas.create_line(map[-1], tiled_pos, fill=Color.PREVIEW,
+                               width=LINE_WIDTH)
+
+            if tiled_pos == map[0]:
+                draw_dot(tiled_pos, Color.START)
+            elif tiled_pos in map:
+                draw_dot(tiled_pos, Color.END)
+            else:
+                draw_dot(tiled_pos, Color.PREVIEW)
+        else:
+            draw_dot(tiled_pos, Color.PREVIEW)
     else:
         raise Exception('Unreachable')
     draw_dot((x, y), dot_color)
-
-
-# Map representation ##########################################################
-# TODO: Implement map representation
 
 
 # Graph generation ############################################################
@@ -186,6 +208,13 @@ def draw_cursor(x, y):
 
 # Pathfinding #################################################################
 # TODO: Implement A* with path smoothing for pathfinding
+
+def reset():
+    global start_pos, end_pos, result_path
+    start_pos = ()
+    end_pos = ()
+    result_path = []
+
 
 def get_distance():
     dist = 0
@@ -221,6 +250,7 @@ def display_pos(pos, name):
     x, y = pos
     return f"{name} = {{{x/TILE_SIZE:.2f}; {y/TILE_SIZE:.2f}}}"
 
+
 def canvas_motion(e):
     if state == State.EDIT_START:
         start_pos = (e.x, e.y)
@@ -247,6 +277,25 @@ def canvas_click(e):
         end_label.config(text=display_pos(end_pos, "end"), font=NORMAL_FONT)
         pathfind()
         state = State.IDLE
+    elif state == State.EDIT_MAP:
+        tiled_x = round(e.x / TILE_SIZE) * TILE_SIZE
+        tiled_y = round(e.y / TILE_SIZE) * TILE_SIZE
+
+        tiled_pos = (tiled_x, tiled_y)
+
+        if map:
+            if tiled_pos == map[0]:
+                map.append(map[0])
+                state = State.IDLE
+            elif tiled_pos in map:
+                while map[-1] != tiled_pos:
+                    map.pop()
+                map.pop()
+            else:
+                map.append(tiled_pos)
+        else:
+            map.append(tiled_pos)
+
 
     render()
     draw_cursor(e.x, e.y)
@@ -255,9 +304,7 @@ def canvas_click(e):
 def edit_points(_):
     global start_pos, end_pos, state, result_path
     if state == State.IDLE:
-        start_pos = ()
-        end_pos = ()
-        result_path = []
+        reset()
         render()
         start_label.config(text="start = {...; ...}", font=BOLD_FONT)
         end_label.config(text="end = {...; ...}")
@@ -266,18 +313,54 @@ def edit_points(_):
         time_label.config(text="Time: ...")
         state = State.EDIT_START
 
+def save_map(_):
+    if not path.exists('maps'):
+        mkdir('maps')
+    name = "maps/" + map_name.get() + ".mp"
+    with open(name, 'w') as f:
+        for point in map:
+            x, y = point
+            f.write(f"{x} {y}\n")
+
+
+def load_map(_):
+    global start_pos, end_pos
+    if not path.exists('maps'):
+        mkdir('maps')
+
+    name = "maps/" + map_name.get() + ".mp"
+    map.clear()
+    reset()
+    with open(name, 'r') as f:
+        for line in f.readlines():
+            x, y = (int(i) for i in line.split())
+            map.append((x, y))
+
+
+def edit_map(_):
+    global state, start_pos, end_pos
+    reset()
+    if state == State.IDLE:
+        if map:
+            map.pop()
+        state = State.EDIT_MAP
+
+
 def attach_events():
     canvas.bind('<Motion>', canvas_motion)
     canvas.bind('<Button-1>', canvas_click)
     points_edit.bind('<Button-1>', edit_points)
+    map_save.bind('<Button-1>', save_map)
+    map_load.bind('<Button-1>', load_map)
+    map_edit.bind('<Button-1>', edit_map)
 
 
 # Entrypoint ##################################################################
 
-def main():
+def create_window():
     window = build_widgets()
     attach_events()
     window.mainloop()
 
 if __name__ == "__main__":
-    main()
+    create_window()
