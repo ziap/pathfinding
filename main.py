@@ -140,6 +140,7 @@ def align_point(x, y):
 def draw_lines(points, fill, width):
     last = ()
     for point in points:
+        draw_dot(point, fill)
         if last:
             canvas.create_line(last, point, fill=fill, width=width)
 
@@ -189,7 +190,7 @@ def draw_cursor(x, y):
             canvas.create_line(map[-1], tiled_pos, fill=Color.PREVIEW,
                                width=LINE_WIDTH)
 
-            if tiled_pos == map[0]:
+            if len(map) > 1 and tiled_pos == map[0]:
                 draw_dot(tiled_pos, Color.START)
             elif tiled_pos in map:
                 draw_dot(tiled_pos, Color.END)
@@ -284,7 +285,7 @@ def canvas_click(e):
         tiled_pos = (tiled_x, tiled_y)
 
         if map:
-            if tiled_pos == map[0]:
+            if len(map) > 1 and tiled_pos == map[0]:
                 map.append(map[0])
                 state = State.IDLE
             elif tiled_pos in map:
@@ -295,7 +296,6 @@ def canvas_click(e):
                 map.append(tiled_pos)
         else:
             map.append(tiled_pos)
-
 
     render()
     draw_cursor(e.x, e.y)
@@ -312,6 +312,7 @@ def edit_points(_):
         distance_label.config(text="Distance: ...")
         time_label.config(text="Time: ...")
         state = State.EDIT_START
+
 
 def save_map(_):
     if not path.exists('maps'):
