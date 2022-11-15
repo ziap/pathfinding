@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import tkinter as tk
 from tkinter import font
 
@@ -44,6 +46,7 @@ start_pos = ()
 end_pos = ()
 result_path = []
 map = [] 
+graph = {}
 
 state = State.IDLE
 
@@ -160,8 +163,17 @@ def render():
 
     draw_lines(map, Color.MAP, LINE_WIDTH)
 
-    # Draw the computed path
+    # Draw the graph
+    # TODO: Add a checkbox to toggle graph visibility
+    if state != State.EDIT_MAP:
+        for e1 in graph:
+            pos1 = map[e1]
+            for e2 in graph[e1]:
+                pos2 = map[e2]
+                
+                canvas.create_line(pos1, pos2)
 
+    # Draw the computed path
     draw_lines(result_path, Color.LINE, LINE_WIDTH)
 
     # Place the start and end dots
@@ -176,9 +188,9 @@ def draw_cursor(x, y):
     if state == State.IDLE:
         dot_color = Color.CURSOR
     elif state == State.EDIT_START:
-        dot_color = Color.START
+        dot_color = Color.START if in_polygon(x, y) else Color.CURSOR
     elif state == State.EDIT_END:
-        dot_color = Color.END
+        dot_color = Color.END if in_polygon(x, y) else Color.CURSOR
     elif state == State.EDIT_MAP:
         x_tiled = round(x / TILE_SIZE) * TILE_SIZE
         y_tiled = round(y / TILE_SIZE) * TILE_SIZE
@@ -204,7 +216,97 @@ def draw_cursor(x, y):
 
 
 # Graph generation ############################################################
-# TODO: Implement grid generation
+
+def orientation(a, b, c):
+    xa, ya = a
+    xb, yb = b
+    xc, yc = c
+    val = (yb - ya) * (xc - xb) - (xb - xa) * (yc - yb)
+    return 1 if val > 0 else 2 if val < 0 else 0
+
+
+def on_segment(a, b, c):
+    xa, ya = a
+    xb, yb = b
+    xc, yc = c
+    return xb <= max(xa, xc) and xb >= min(xa, xc) and yb <= max(ya, yc) and yb >= min(ya, yc)
+
+
+def intersect(p1, q1, p2, q2):
+    o1 = orientation(p1, q1, p2)
+    o2 = orientation(p1, q1, q2)
+    o3 = orientation(p2, q2, p1)
+    o4 = orientation(p2, q2, q1)
+
+    if o1 != o2 and o3 != o4:
+        return True
+
+    if o1 == 0 and on_segment(p1, p2, q1):
+        return True
+
+    if o2 == 0 and on_segment(p1, q2, q1):
+        return True
+
+    if o3 == 0 and on_segment(p2, p1, q2):
+        return True
+
+    if o4 == 0 and on_segment(p2, q1, q2):
+        return True
+
+    return False
+
+
+def in_polygon(x, y):
+    inside = False
+    for i in range(len(map) - 2):
+        x1, y1 = map[i]
+        x2, y2 = map[i + 1]
+        if x <= max(x1, x2) and y > min(y1, y2) and y <= max(y1, y2):
+            inside = not inside
+    return inside 
+
+
+def generate_graph():
+    global graph
+
+    graph = {}
+    
+    for i in range(len(map) - 1):
+        p1 = map[i]
+        q1 = map[i + 1]
+
+        xi, yi = p1
+        xj, yj = q1
+
+        dx = xj - xi
+        dy = yj - yi
+
+        graph[i] = {}
+        graph[i][i + 1] = sqrt(dx * dx + dy * dy)
+
+        for j in range(i + 2, len(map) - 1):
+            q1 = map[j]
+
+            xi, yi = p1
+            xj, yj = q1
+
+            if not in_polygon((xi + xj) / 2, (yi + yj) / 2):
+                continue
+
+            is_intersect = False
+            
+            for k in range(len(map) - 2):
+                if k == i or k == j or k + 1 == i or k + 1 == j:
+                    continue
+                if intersect(p1, q1, map[k], map[k + 1]):
+                    is_intersect = True
+                    break
+
+            if not is_intersect:
+                dx = xj - xi
+                dy = yj - yi
+
+                graph[i][j] = sqrt(dx * dx + dy * dy)
 
 
 # Pathfinding #################################################################
@@ -221,7 +323,7 @@ def get_distance():
     dist = 0
     last_x, last_y = None, None
 
-    for (x, y) in result_path:
+    for x, y in result_path:
         if last_x and last_y:
             dx = x - last_x 
             dy = y - last_y
@@ -266,14 +368,14 @@ def canvas_motion(e):
 
 def canvas_click(e):
     global start_pos, end_pos, state
-    if state == State.EDIT_START:
+    if state == State.EDIT_START and in_polygon(e.x, e.y):
         start_pos = (e.x, e.y)
         start_label.config(text=display_pos(start_pos, "start"),
                            font=NORMAL_FONT)
         end_label.config(text="end = {...; ...}", font=BOLD_FONT)
         end_label.cget('font')
         state = State.EDIT_END
-    elif state == State.EDIT_END:
+    elif state == State.EDIT_END and in_polygon(e.x, e.y):
         end_pos = (e.x, e.y)
         end_label.config(text=display_pos(end_pos, "end"), font=NORMAL_FONT)
         pathfind()
@@ -288,6 +390,7 @@ def canvas_click(e):
             if len(map) > 1 and tiled_pos == map[0]:
                 map.append(map[0])
                 state = State.IDLE
+                generate_graph()
             elif tiled_pos in map:
                 while map[-1] != tiled_pos:
                     map.pop()
@@ -303,7 +406,7 @@ def canvas_click(e):
 
 def edit_points(_):
     global start_pos, end_pos, state, result_path
-    if state == State.IDLE:
+    if state == State.IDLE and len(map) > 3:
         reset()
         render()
         start_label.config(text="start = {...; ...}", font=BOLD_FONT)
@@ -336,6 +439,7 @@ def load_map(_):
         for line in f.readlines():
             x, y = (int(i) for i in line.split())
             map.append((x, y))
+        generate_graph()
 
 
 def edit_map(_):
@@ -355,13 +459,14 @@ def attach_events():
     map_load.bind('<Button-1>', load_map)
     map_edit.bind('<Button-1>', edit_map)
 
-
 # Entrypoint ##################################################################
 
-def create_window():
+
+def run():
     window = build_widgets()
     attach_events()
     window.mainloop()
 
+
 if __name__ == "__main__":
-    create_window()
+    run()
