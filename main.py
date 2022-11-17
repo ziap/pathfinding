@@ -4,13 +4,12 @@ import tkinter as tk
 from tkinter import font
 
 from time import time
-from math import sqrt, floor, ceil, inf
+from math import sqrt, inf
 
 from os import path, mkdir
 
 from enum import Enum
 from types import SimpleNamespace
-
 
 # Configurations ##############################################################
 
@@ -54,17 +53,16 @@ state = State.IDLE
 
 # Tkinter widgets #############################################################
 
-def build_widgets():
+def run():
     window = tk.Tk(className="pathfinding")
-    window.wm_title("Pathfinding")
-    window.wm_resizable(False, False)
+    window.title("Pathfinding")
+    window.resizable(False, False)
 
     global NORMAL_FONT, BOLD_FONT
     NORMAL_FONT = font.Font(size=FONT_SIZE, weight='normal')
     BOLD_FONT   = font.Font(size=FONT_SIZE, weight='bold')
 
-    root = tk.Frame(window)
-    root.pack(padx=PADDING, pady=PADDING)
+    root = tk.Frame(window).pack(padx=PADDING, pady=PADDING)
 
     config_menu = tk.Frame(root)
     config_menu.pack(padx=PADDING, pady=PADDING, fill='x')
@@ -73,27 +71,17 @@ def build_widgets():
     map_menu.pack(side=tk.LEFT, expand=1, anchor='w')
 
     global map_name
-    map_name = tk.Entry(map_menu)
-    map_name.pack(side=tk.LEFT, padx=PADDING)
+    map_name = tk.StringVar()
+    tk.Entry(map_menu, textvariable=map_name).pack(side=tk.LEFT, padx=PADDING)
 
-    global map_save
-    map_save = tk.Button(map_menu, text='Save', font=NORMAL_FONT)
-    map_save.pack(side=tk.LEFT, padx=PADDING)
-
-    global map_load
-    map_load = tk.Button(map_menu, text='Load', font=NORMAL_FONT)
-    map_load.pack(side=tk.LEFT, padx=PADDING)
-
-    global map_edit
-    map_edit = tk.Button(map_menu, text='Edit', font=NORMAL_FONT)
-    map_edit.pack(side=tk.LEFT, padx=PADDING)
+    tk.Button(map_menu, text='Save', font=NORMAL_FONT, command=save_map).pack(side=tk.LEFT, padx=PADDING)
+    tk.Button(map_menu, text='Load', font=NORMAL_FONT, command=load_map).pack(side=tk.LEFT, padx=PADDING)
+    tk.Button(map_menu, text='Edit', font=NORMAL_FONT, command=edit_map).pack(side=tk.LEFT, padx=PADDING)
 
     points_menu = tk.Frame(config_menu)
     points_menu.pack(side=tk.LEFT, expand=1, anchor='e')
 
-    global points_edit
-    points_edit = tk.Button(points_menu, text="Edit", font=NORMAL_FONT)
-    points_edit.pack(side=tk.LEFT, padx=PADDING)
+    tk.Button(points_menu, text="Edit", font=NORMAL_FONT, command=edit_points).pack(side=tk.LEFT, padx=PADDING)
 
     global start_label
     start_label = tk.Label(points_menu, text="start = {...; ...}", font=NORMAL_FONT)
@@ -108,24 +96,26 @@ def build_widgets():
     canvas.config(cursor='none')
     canvas.pack(padx=PADDING, pady=PADDING)
 
+    canvas.bind('<Motion>', canvas_motion)
+    canvas.bind('<Button-1>', canvas_click)
+
     result_menu = tk.Frame(root)
     result_menu.pack(padx=PADDING, pady=PADDING, side=tk.LEFT, anchor='w')
 
-    global show_graph_cb, show_graph
+    global show_graph
     show_graph = tk.BooleanVar()
     show_graph.trace_add("write", lambda *_: render())
-    show_graph_cb = tk.Checkbutton(result_menu, text="Show graph", variable=show_graph, onvalue=True, offvalue=False)
-    show_graph_cb.pack(side=tk.RIGHT, padx=PADDING)
+    tk.Checkbutton(result_menu, text="Show graph", variable=show_graph, onvalue=True, offvalue=False).pack(side=tk.RIGHT, padx=PADDING)
 
     global distance_label
-    distance_label = tk.Label(result_menu, text="Distance: ...", font=NORMAL_FONT)
-    distance_label.pack(side=tk.LEFT, padx=PADDING)
+    distance_label = tk.StringVar(value="Distance: ...")
+    tk.Label(result_menu, textvariable=distance_label, font=NORMAL_FONT).pack(side=tk.LEFT, padx=PADDING)
 
     global time_label
-    time_label = tk.Label(result_menu, text="Time: ...", font=NORMAL_FONT)
-    time_label.pack(side=tk.LEFT, padx=PADDING)
+    time_label = tk.StringVar(value="Time: ...")
+    tk.Label(result_menu, textvariable=time_label, font=NORMAL_FONT).pack(side=tk.LEFT, padx=PADDING)
 
-    return window
+    window.mainloop()
 
 # Rendering ###################################################################
 
@@ -222,7 +212,6 @@ def draw_cursor(x, y):
         raise Exception('Unreachable')
     draw_dot((x, y), dot_color)
 
-
 # Graph generation ############################################################
 
 def orientation(a, b, c):
@@ -279,7 +268,6 @@ def in_polygon(x, y):
             inside = not inside
     
     return inside 
-
 
 def add_edge(idx1, idx2, pos1, pos2, rev):
     xi, yi = pos1
@@ -347,22 +335,7 @@ def generate_graph():
         for j in range(i + 2, len(map) - 1):
             add_edge(i, j, map[i], map[j], True)
 
-
-# Pathfinding #################################################################
-
-def reset():
-    global start_pos, end_pos, result_path, graph
-    start_pos = ()
-    end_pos = ()
-    result_path = []
-
-    # Remove start and end from visibility graph
-    if -1 in graph:
-        del graph[-1]
-    for e in graph:
-        if -2 in graph[e]:
-            del graph[e][-2]
-        
+# Pathfinding #################################################################    
 
 def pathfind():
     global result_path
@@ -450,10 +423,24 @@ def pathfind():
 
     end_time = time()
     elapsed_time = (end_time - start_time) * 1000
-    distance_label.config(text=f"Distance: {g_end / TILE_SIZE:.2f}")
-    time_label.config(text=f"Time: {elapsed_time:.2f}ms")
+    distance_label.set(f"Distance: {g_end / TILE_SIZE:.2f}")
+    time_label.set(f"Time: {elapsed_time:.2f}ms")
 
 # Events ######################################################################
+
+def reset():
+    global start_pos, end_pos, result_path, graph
+    start_pos = ()
+    end_pos = ()
+    result_path = []
+
+    # Remove start and end from visibility graph
+    if -1 in graph:
+        del graph[-1]
+    for e in graph:
+        if -2 in graph[e]:
+            del graph[e][-2]
+
 
 def display_pos(pos, name):
     x, y = pos
@@ -516,7 +503,7 @@ def canvas_click(e):
     draw_cursor(e.x, e.y)
 
 
-def edit_points(_):
+def edit_points():
     global start_pos, end_pos, state, result_path
     if state == State.IDLE and len(map) > 3:
         reset()
@@ -524,12 +511,12 @@ def edit_points(_):
         start_label.config(text="start = {...; ...}", font=BOLD_FONT)
         end_label.config(text="end = {...; ...}")
 
-        distance_label.config(text="Distance: ...")
-        time_label.config(text="Time: ...")
+        distance_label.set("Distance: ...")
+        time_label.set("Time: ...")
         state = State.EDIT_START
 
 
-def save_map(_):
+def save_map():
     if not path.exists('maps'):
         mkdir('maps')
     name = "maps/" + map_name.get() + ".mp"
@@ -539,7 +526,7 @@ def save_map(_):
             f.write(f"{x} {y}\n")
 
 
-def load_map(_):
+def load_map():
     global start_pos, end_pos
     if not path.exists('maps'):
         mkdir('maps')
@@ -554,7 +541,7 @@ def load_map(_):
         generate_graph()
 
 
-def edit_map(_):
+def edit_map():
     global state, start_pos, end_pos
     reset()
     if state == State.IDLE:
@@ -562,22 +549,7 @@ def edit_map(_):
             map.pop()
         state = State.EDIT_MAP
 
-
-def attach_events():
-    canvas.bind('<Motion>', canvas_motion)
-    canvas.bind('<Button-1>', canvas_click)
-    points_edit.bind('<Button-1>', edit_points)
-    map_save.bind('<Button-1>', save_map)
-    map_load.bind('<Button-1>', load_map)
-    map_edit.bind('<Button-1>', edit_map)
-
 # Entrypoint ##################################################################
-
-def run():
-    window = build_widgets()
-    attach_events()
-    window.mainloop()
-
 
 if __name__ == "__main__":
     run()
