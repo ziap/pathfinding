@@ -4,7 +4,7 @@ import tkinter as tk
 from tkinter import font
 
 from time import time
-from math import sqrt, floor, ceil
+from math import sqrt, floor, ceil, inf
 
 from os import path, mkdir
 
@@ -29,8 +29,10 @@ class Color(SimpleNamespace):
     MAP     = '#2563eb'
     PREVIEW = '#475569'
 
+
 WIDTH      = 800
 HEIGHT     = 600
+INF        = inf
 PADDING    = 2.5
 DOT_RADIUS = 5
 TILE_SIZE  = 40
@@ -49,7 +51,6 @@ map = []
 graph = {}
 
 state = State.IDLE
-
 
 # Tkinter widgets #############################################################
 
@@ -110,6 +111,12 @@ def build_widgets():
     result_menu = tk.Frame(root)
     result_menu.pack(padx=PADDING, pady=PADDING, side=tk.LEFT, anchor='w')
 
+    global show_graph_cb, show_graph
+    show_graph = tk.BooleanVar()
+    show_graph.trace_add("write", lambda *_: render())
+    show_graph_cb = tk.Checkbutton(result_menu, text="Show graph", variable=show_graph, onvalue=True, offvalue=False)
+    show_graph_cb.pack(side=tk.RIGHT, padx=PADDING)
+
     global distance_label
     distance_label = tk.Label(result_menu, text="Distance: ...", font=NORMAL_FONT)
     distance_label.pack(side=tk.LEFT, padx=PADDING)
@@ -119,7 +126,6 @@ def build_widgets():
     time_label.pack(side=tk.LEFT, padx=PADDING)
 
     return window
-
 
 # Rendering ###################################################################
 
@@ -151,7 +157,9 @@ def draw_lines(points, fill, width):
 
 
 def render():
+    global start_pos, end_pos
     canvas.delete("all")
+
     # Draw the grid
     for i in range(MAP_WIDTH + 1):
         canvas.create_line(i * TILE_SIZE, 0, i * TILE_SIZE, HEIGHT,
@@ -161,23 +169,23 @@ def render():
         canvas.create_line(0, i * TILE_SIZE, WIDTH, i * TILE_SIZE,
                            fill=Color.GRID)
 
-    draw_lines(map, Color.MAP, LINE_WIDTH)
-
     # Draw the graph
-    # TODO: Add a checkbox to toggle graph visibility
-    if state != State.EDIT_MAP:
+    if state != State.EDIT_MAP and show_graph.get():
         for e1 in graph:
-            pos1 = map[e1]
+            pos1 = start_pos if e1 == -1 else end_pos if e1 == -2 else map[e1]
             for e2 in graph[e1]:
-                pos2 = map[e2]
-                
-                canvas.create_line(pos1, pos2)
+                if e1 < e2:
+                    pos2 = start_pos if e2 == -1 else end_pos if e2 == -2 else map[e2]
+                    
+                    if pos1 and pos2:
+                        canvas.create_line(pos1, pos2, fill=Color.PREVIEW)
+                        
+    draw_lines(map, Color.MAP, LINE_WIDTH)
 
     # Draw the computed path
     draw_lines(result_path, Color.LINE, LINE_WIDTH)
 
     # Place the start and end dots
-    global start_pos, end_pos
     if start_pos:
         draw_dot(start_pos, Color.START)
     if end_pos:
@@ -266,14 +274,49 @@ def in_polygon(x, y):
     return inside 
 
 
+def add_edge(idx1, idx2, pos1, pos2, rev):
+    xi, yi = pos1
+    xj, yj = pos2
+
+    if not in_polygon((xi + xj) / 2, (yi + yj) / 2):
+        return
+
+    is_intersect = False
+    
+    for k in range(len(map) - 2):
+        if k == idx1 or k == idx2 or k + 1 == idx1 or k + 1 == idx2:
+            continue
+        if intersect(pos1, pos2, map[k], map[k + 1]):
+            is_intersect = True
+            break
+
+    if not is_intersect:
+        dx = xj - xi
+        dy = yj - yi
+        
+        w = sqrt(dx * dx + dy * dy)
+        
+        if idx1 not in graph:
+            graph[idx1] = {}
+
+        graph[idx1][idx2] = w
+        
+        if rev:
+            if idx2 not in graph:
+                graph[idx2] = {}
+
+            graph[idx2][idx1] = w
+
+
 def generate_graph():
     global graph
 
     graph = {}
     
     for i in range(len(map) - 1):
+        j = (i + 1) % (len(map) - 1)
         p1 = map[i]
-        q1 = map[i + 1]
+        q1 = map[j]
 
         xi, yi = p1
         xj, yj = q1
@@ -281,42 +324,32 @@ def generate_graph():
         dx = xj - xi
         dy = yj - yi
 
-        graph[i] = {}
-        graph[i][i + 1] = sqrt(dx * dx + dy * dy)
+        w = sqrt(dx * dx + dy * dy)
+        
+        if i not in graph:
+            graph[i] = {}
+
+        if j not in graph:
+            graph[j] = {}
+
+        graph[i][j] = graph[j][i] = w
 
         for j in range(i + 2, len(map) - 1):
-            q1 = map[j]
-
-            xi, yi = p1
-            xj, yj = q1
-
-            if not in_polygon((xi + xj) / 2, (yi + yj) / 2):
-                continue
-
-            is_intersect = False
-            
-            for k in range(len(map) - 2):
-                if k == i or k == j or k + 1 == i or k + 1 == j:
-                    continue
-                if intersect(p1, q1, map[k], map[k + 1]):
-                    is_intersect = True
-                    break
-
-            if not is_intersect:
-                dx = xj - xi
-                dy = yj - yi
-
-                graph[i][j] = sqrt(dx * dx + dy * dy)
+            add_edge(i, j, map[i], map[j], True)
 
 
 # Pathfinding #################################################################
-# TODO: Implement A* with path smoothing for pathfinding
 
 def reset():
-    global start_pos, end_pos, result_path
+    global start_pos, end_pos, result_path, graph
     start_pos = ()
     end_pos = ()
     result_path = []
+    if -1 in graph:
+        del graph[-1]
+    for e in graph:
+        if -2 in graph[e]:
+            del graph[e][-2]
 
 
 def get_distance():
@@ -339,13 +372,85 @@ def pathfind():
     start_time = time()
     if not start_pos or not end_pos:
         return
-    result_path = [start_pos, end_pos]
-    distance = get_distance()
+
+    for i in range(len(map) - 1):
+        p = map[i]
+        add_edge(-1, i, start_pos, p, False)
+        add_edge(i, -2, p, end_pos, False)
+
+    add_edge(-1, -2, start_pos, end_pos, False)
+
+    n = len(map) - 1
+
+    g = [INF] * n
+    f = [INF] * n
+    p = [-3] * n
+    h = [0.0] * n
+
+    for i in range(n):
+        x, y = map[i] 
+        dx = x - end_pos[0]
+        dy = y - end_pos[1]
+        
+        h[i] = sqrt(dx * dx + dy * dy)
+
+    open = [False] * n
+    g_end = INF
+    p_end = -3
+    open_end = False
+
+    for neighbor in graph[-1]:
+        if neighbor != -2:
+            dist = graph[-1][neighbor]
+            if dist < g[neighbor]:
+                g[neighbor] = dist
+                f[neighbor] = dist + h[neighbor]
+                p[neighbor] = -1
+                open[neighbor] = True
+        else:
+            if graph[-1][-2] < g_end:
+                g_end = graph[-1][-2]
+                open_end = True
+                p_end = -1
+    
+    while True:
+        v = -1
+        for i in range(n):
+            if open[i] and (v == -1 or f[i] < f[v]):
+                v = i
+        
+        if open_end and g_end < f[v]:
+            break
+
+        open[v] = False
+
+        for neighbor in graph[v]:
+            dist = g[v] + graph[v][neighbor]
+            if neighbor != -2:
+                if dist < g[neighbor]:
+                    g[neighbor] = dist
+                    f[neighbor] = dist + h[neighbor]
+                    p[neighbor] = v
+                    open[neighbor] = True
+            else:
+                if dist < g_end:
+                    g_end = dist
+                    open_end = True
+                    p_end = v
+
+    result_path = [end_pos]
+    last = p_end
+
+    while last != -1:
+        result_path.append(map[last])
+        last = p[last]
+    
+    result_path.append(start_pos)
+
     end_time = time()
     elapsed_time = (end_time - start_time) * 1000
-    distance_label.config(text=f"Distance: {distance:.2f}")
+    distance_label.config(text=f"Distance: {g_end / TILE_SIZE:.2f}")
     time_label.config(text=f"Time: {elapsed_time:.2f}ms")
-
 
 # Events ######################################################################
 
@@ -460,7 +565,6 @@ def attach_events():
     map_edit.bind('<Button-1>', edit_map)
 
 # Entrypoint ##################################################################
-
 
 def run():
     window = build_widgets()
