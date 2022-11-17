@@ -174,7 +174,7 @@ def render():
         for e1 in graph:
             pos1 = start_pos if e1 == -1 else end_pos if e1 == -2 else map[e1]
             for e2 in graph[e1]:
-                if e1 < e2:
+                if e1 < e2 or e2 == -2:
                     pos2 = start_pos if e2 == -1 else end_pos if e2 == -2 else map[e2]
                     
                     if pos1 and pos2:
@@ -266,11 +266,18 @@ def intersect(p1, q1, p2, q2):
 
 def in_polygon(x, y):
     inside = False
-    for i in range(len(map) - 2):
+    for i in range(len(map) - 1):
         x1, y1 = map[i]
         x2, y2 = map[i + 1]
-        if x <= max(x1, x2) and y > min(y1, y2) and y <= max(y1, y2):
+
+        if (y1 > y2):
+            x1, x2 = x2, x1
+            y1, y2 = y2, y1
+
+        # Check collision with horizontal line to the right of (x, y)
+        if y > y1 and y <= y2 and x <= x1 + (x2 - x1) * (y - y1) / (y2 - y1):
             inside = not inside
+    
     return inside 
 
 
@@ -278,6 +285,8 @@ def add_edge(idx1, idx2, pos1, pos2, rev):
     xi, yi = pos1
     xj, yj = pos2
 
+    # In case it doesn't intersect with any polygon edge, discard if the
+    # midpoint is outside of the polygon
     if not in_polygon((xi + xj) / 2, (yi + yj) / 2):
         return
 
@@ -314,6 +323,7 @@ def generate_graph():
     graph = {}
     
     for i in range(len(map) - 1):
+        # Edge of polygon is also edge of visibility graph
         j = (i + 1) % (len(map) - 1)
         p1 = map[i]
         q1 = map[j]
@@ -345,26 +355,13 @@ def reset():
     start_pos = ()
     end_pos = ()
     result_path = []
+
+    # Remove start and end from visibility graph
     if -1 in graph:
         del graph[-1]
     for e in graph:
         if -2 in graph[e]:
             del graph[e][-2]
-
-
-def get_distance():
-    dist = 0
-    last_x, last_y = None, None
-
-    for x, y in result_path:
-        if last_x and last_y:
-            dx = x - last_x 
-            dy = y - last_y
-            dist += sqrt(dx * dx + dy * dy)
-
-        last_x = x
-        last_y = y
-    return dist / TILE_SIZE
         
 
 def pathfind():
@@ -373,32 +370,36 @@ def pathfind():
     if not start_pos or not end_pos:
         return
 
-    for i in range(len(map) - 1):
+    n = len(map) - 1
+
+    # Add the start and end node to the visibility graph
+    for i in range(n):
         p = map[i]
         add_edge(-1, i, start_pos, p, False)
         add_edge(i, -2, p, end_pos, False)
-
     add_edge(-1, -2, start_pos, end_pos, False)
 
-    n = len(map) - 1
 
-    g = [INF] * n
-    f = [INF] * n
-    p = [-3] * n
-    h = [0.0] * n
+    g = [INF] * n  # g(x) = smallest distance from start to x
+    h = [0.0] * n  # h(x) = estimated cost to travel from x to end
+    f = [INF] * n  # f(x) = g(x) + h(x)
+    p = [-3] * n   # the parent of a node in the final path
 
+    # Use euclidean distance to calculate h(x)
     for i in range(n):
         x, y = map[i] 
         dx = x - end_pos[0]
         dy = y - end_pos[1]
-        
         h[i] = sqrt(dx * dx + dy * dy)
 
+    # NOTE: switch to a binary heap to improve performance
     open = [False] * n
+
     g_end = INF
     p_end = -3
     open_end = False
 
+    # Basic A* implementation
     for neighbor in graph[-1]:
         if neighbor != -2:
             dist = graph[-1][neighbor]
@@ -412,7 +413,6 @@ def pathfind():
                 g_end = graph[-1][-2]
                 open_end = True
                 p_end = -1
-    
     while True:
         v = -1
         for i in range(n):
@@ -437,7 +437,8 @@ def pathfind():
                     g_end = dist
                     open_end = True
                     p_end = v
-
+    
+    # Path reconstruction
     result_path = [end_pos]
     last = p_end
 
@@ -501,7 +502,13 @@ def canvas_click(e):
                     map.pop()
                 map.pop()
             else:
-                map.append(tiled_pos)
+                is_intersect = False
+                for k in range(len(map) - 2):
+                    if intersect(map[-1], tiled_pos, map[k], map[k + 1]):
+                        is_intersect = True
+                        break
+                if not is_intersect:
+                    map.append(tiled_pos)
         else:
             map.append(tiled_pos)
 
