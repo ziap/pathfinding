@@ -3,7 +3,7 @@
 import tkinter as tk
 from tkinter import font
 
-from time import time
+from time import perf_counter
 from math import sqrt, inf
 
 from os import path, mkdir
@@ -200,7 +200,7 @@ def draw_cursor(x, y):
             canvas.create_line(map[-1], tiled_pos, fill=Color.PREVIEW,
                                width=LINE_WIDTH)
 
-            if len(map) > 1 and tiled_pos == map[0]:
+            if len(map) > 2 and tiled_pos == map[0]:
                 draw_dot(tiled_pos, Color.START)
             elif tiled_pos in map:
                 draw_dot(tiled_pos, Color.END)
@@ -288,9 +288,7 @@ def add_edge(idx1, idx2, pos1, pos2, rev):
             break
 
     if not is_intersect:
-        dx = xj - xi
-        dy = yj - yi
-        
+        dx, dy = xj - xi, yj - yi
         w = sqrt(dx * dx + dy * dy)
         
         if idx1 not in graph:
@@ -311,7 +309,7 @@ def generate_graph():
     graph = {}
     
     for i in range(len(map) - 1):
-        # Edge of polygon is also edge of visibility graph
+        # All polygon edges are also edges of visibility graph
         j = (i + 1) % (len(map) - 1)
         p1 = map[i]
         q1 = map[j]
@@ -319,9 +317,7 @@ def generate_graph():
         xi, yi = p1
         xj, yj = q1
 
-        dx = xj - xi
-        dy = yj - yi
-
+        dx, dy = xj - xi, yj - yi
         w = sqrt(dx * dx + dy * dy)
         
         if i not in graph:
@@ -339,7 +335,7 @@ def generate_graph():
 
 def pathfind():
     global result_path
-    start_time = time()
+    start_time = perf_counter()
     if not start_pos or not end_pos:
         return
 
@@ -361,8 +357,7 @@ def pathfind():
     # Use euclidean distance to calculate h(x)
     for i in range(n):
         x, y = map[i] 
-        dx = x - end_pos[0]
-        dy = y - end_pos[1]
+        dx, dy = x - end_pos[0], y - end_pos[1]
         h[i] = sqrt(dx * dx + dy * dy)
 
     # NOTE: switch to a binary heap to improve performance
@@ -421,7 +416,7 @@ def pathfind():
     
     result_path.append(start_pos)
 
-    end_time = time()
+    end_time = perf_counter()
     elapsed_time = (end_time - start_time) * 1000
     distance_label.set(f"Distance: {g_end / TILE_SIZE:.2f}")
     time_label.set(f"Time: {elapsed_time:.2f}ms")
@@ -473,29 +468,45 @@ def canvas_click(e):
         end_label.config(text=display_pos(end_pos, "end"), font=NORMAL_FONT)
         pathfind()
         state = State.IDLE
+    
+    # Map editor
     elif state == State.EDIT_MAP:
-        tiled_x = round(e.x / TILE_SIZE) * TILE_SIZE
-        tiled_y = round(e.y / TILE_SIZE) * TILE_SIZE
-
-        tiled_pos = (tiled_x, tiled_y)
+        tiled_pos = align_point(e.x, e.y)
 
         if map:
-            if len(map) > 1 and tiled_pos == map[0]:
-                map.append(map[0])
-                state = State.IDLE
-                generate_graph()
-            elif tiled_pos in map:
+            # Remove nodes by clicking it
+            if tiled_pos in map and (len(map) == 1 or tiled_pos != map[0]):
                 while map[-1] != tiled_pos:
                     map.pop()
                 map.pop()
             else:
+                # Prevent self-intersecting polygons
                 is_intersect = False
                 for k in range(len(map) - 2):
+                    if tiled_pos == map[0] and k == 0:
+                        continue
                     if intersect(map[-1], tiled_pos, map[k], map[k + 1]):
                         is_intersect = True
                         break
+
                 if not is_intersect:
-                    map.append(tiled_pos)
+                    if len(map) > 2:
+                        # Join colinear edges to lower edge count
+                        if orientation(map[-2], map[-1], tiled_pos) == 0:
+                            map.pop()
+
+                        # Finish editing by clicking the first node
+                        if tiled_pos == map[0]:
+                            if orientation(map[-1], map[0], map[1]) == 0:
+                                map.pop(0)
+
+                            map.append(map[0])
+                            state = State.IDLE
+                            generate_graph()
+                        else:
+                            map.append(tiled_pos)
+                    elif tiled_pos != map[0]:
+                        map.append(tiled_pos)
         else:
             map.append(tiled_pos)
 
@@ -523,7 +534,7 @@ def save_map():
     with open(name, 'w') as f:
         for point in map:
             x, y = point
-            f.write(f"{x} {y}\n")
+            f.write(f"{x // TILE_SIZE} {y // TILE_SIZE}\n")
 
 
 def load_map():
@@ -537,7 +548,7 @@ def load_map():
     with open(name, 'r') as f:
         for line in f.readlines():
             x, y = (int(i) for i in line.split())
-            map.append((x, y))
+            map.append((x * TILE_SIZE, y * TILE_SIZE))
         generate_graph()
 
 
