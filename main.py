@@ -30,12 +30,12 @@ class Color(SimpleNamespace):
     PREVIEW = '#475569'
 
 
-WIDTH      = 800
-HEIGHT     = 600
+WIDTH      = 1024
+HEIGHT     = 768
 INF        = inf
 PADDING    = 2.5
 DOT_RADIUS = 5
-TILE_SIZE  = 40
+TILE_SIZE  = 16
 FONT_SIZE  = 10
 LINE_WIDTH = 3
 
@@ -214,7 +214,7 @@ def draw_cursor(x, y):
         raise Exception('Unreachable')
     draw_dot((x, y), dot_color)
 
-# Graph generation ############################################################
+# Geometry ####################################################################
 
 def orientation(a, b, c):
     xa, ya = a
@@ -270,6 +270,8 @@ def in_polygon(x, y):
             inside = not inside
     
     return inside 
+
+# Graph generation ############################################################
 
 def add_edge(idx1, idx2, pos1, pos2, rev):
     xi, yi = pos1
@@ -351,7 +353,6 @@ def pathfind():
         add_edge(i, -2, p, end_pos, False)
     add_edge(-1, -2, start_pos, end_pos, False)
 
-
     g = [INF] * n  # g(x) = smallest distance from start to x
     h = [0.0] * n  # h(x) = estimated cost to travel from x to end
     f = [INF] * n  # f(x) = g(x) + h(x)
@@ -427,62 +428,69 @@ def pathfind():
 # Random map generation #######################################################
 
 def gen_poly(w, h, c=0):
-  if c == 0:
-    c = max(w, h)
-  x = [randrange(w + 1) for _ in range(c)]
-  y = [randrange(h + 1) for _ in range(c)]
-  
-  while True:
-    intersects = []
+    if c == 0:
+        c = w * h // 25
 
-    for i in range(c - 1):
-      for j in range(i + 2, c):
-        if i == 0 and j == c - 1:
-          continue
-        i1, j1 = i + 1, (j + 1) % c
-        p1 = (x[i], y[i])
-        p2 = (x[i1], y[i1])
-        p3 = (x[j], y[j])
-        p4 = (x[j1], y[j1])
+    # Create set of random points
+    x = [randrange(w + 1) for _ in range(c)]
+    y = [randrange(h + 1) for _ in range(c)]
+  
+    while True:
+        # Get a random pair of intersecting edge
+        # NOTE: switch to first pair may improve performance
+        intersects = []
+
+        for i in range(c - 1):
+            for j in range(i + 2, c):
+                if i == 0 and j == c - 1:
+                    continue
+                i1, j1 = i + 1, (j + 1) % c
+                p1 = (x[i], y[i])
+                p2 = (x[i1], y[i1])
+                p3 = (x[j], y[j])
+                p4 = (x[j1], y[j1])
+                
+                if j - i == 2 and (p2 == p3 or p1 == p4):
+                    continue
+                if intersect(p1, p2, p3, p4):
+                    intersects.append((i, j))
         
-        if j - i == 2 and (p2 == p3 or p1 == p4):
-          continue
-        if intersect(p1, p2, p3, p4):
-          intersects.append((i, j))
-      
-    if intersects == []:
-      break
+        if intersects == []:
+          break
+        
+        # The final pair can have a common vertex
+        if len(intersects) == 1:
+          sx, sy = intersects[0]
+          sx1, sy1 = (sx + 1), (sy + 1) % c
+          p1 = (x[sx], y[sx])
+          p2 = (x[sx1], y[sx1])
+          p3 = (x[sy], y[sy])
+          p4 = (x[sy1], y[sy1])
 
-    if len(intersects) == 1:
-      sx, sy = intersects[0]
-      sx1, sy1 = (sx + 1), (sy + 1) % c
-      p1 = (x[sx], y[sx])
-      p2 = (x[sx1], y[sx1])
-      p3 = (x[sy], y[sy])
-      p4 = (x[sy1], y[sy1])
+          if p2 == p3 or p1 == p4:
+            break
 
-      if p2 == p3 or p1 == p4:
-        break
+        sx, sy = choice(intersects)
 
-    sx, sy = choice(intersects)
+        # Fix the self-intersection 
+        x[sx + 1:sy + 1] = x[sy:sx:-1]
+        y[sx + 1:sy + 1] = y[sy:sx:-1]
 
-    x[sx + 1:sy + 1] = x[sy:sx:-1]
-    y[sx + 1:sy + 1] = y[sy:sx:-1]
+    res = []
 
-  res = []
+    # Remove colinear adjacent edges
+    for i in range(c):
+        p = (x[i] * TILE_SIZE, y[i] * TILE_SIZE)
+        if len(res) > 1 and orientation(res[-2], res[-1], p) == 0:
+          res.pop()
+        res.append(p)
 
-  for i in range(c):
-    p = (x[i] * TILE_SIZE, y[i] * TILE_SIZE)
-    if len(res) > 1 and orientation(res[-2], res[-1], p) == 0:
-      res.pop()
-    res.append(p)
-  
-  if len(res) > 2 and orientation(res[-1], res[0], res[1]) == 0:
-    res.pop(0)
+    if len(res) > 2 and orientation(res[-1], res[0], res[1]) == 0:
+        res.pop(0)
 
-  res.append(res[0])
-  
-  return res
+    res.append(res[0])
+
+    return res
 
 # Events ######################################################################
 
