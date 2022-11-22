@@ -5,6 +5,7 @@ from tkinter import font
 
 from time import perf_counter
 from math import sqrt, inf
+from random import randrange, choice
 
 from os import path, mkdir
 
@@ -77,6 +78,7 @@ def run():
     tk.Button(map_menu, text='Save', font=NORMAL_FONT, command=save_map).pack(side=tk.LEFT, padx=PADDING)
     tk.Button(map_menu, text='Load', font=NORMAL_FONT, command=load_map).pack(side=tk.LEFT, padx=PADDING)
     tk.Button(map_menu, text='Edit', font=NORMAL_FONT, command=edit_map).pack(side=tk.LEFT, padx=PADDING)
+    tk.Button(map_menu, text='Random', font=NORMAL_FONT, command=random_map).pack(side=tk.LEFT, padx=PADDING)
 
     points_menu = tk.Frame(config_menu)
     points_menu.pack(side=tk.LEFT, expand=1, anchor='e')
@@ -280,10 +282,11 @@ def add_edge(idx1, idx2, pos1, pos2, rev):
 
     is_intersect = False
     
-    for k in range(len(map) - 2):
-        if k == idx1 or k == idx2 or k + 1 == idx1 or k + 1 == idx2:
+    for k in range(len(map) - 1):
+        k1 = (k + 1) % (len(map) - 1)
+        if k == idx1 or k == idx2 or k1 == idx1 or k1 == idx2:
             continue
-        if intersect(pos1, pos2, map[k], map[k + 1]):
+        if intersect(pos1, pos2, map[k], map[k1]):
             is_intersect = True
             break
 
@@ -421,6 +424,66 @@ def pathfind():
     distance_label.set(f"Distance: {g_end / TILE_SIZE:.2f}")
     time_label.set(f"Time: {elapsed_time:.2f}ms")
 
+# Random map generation #######################################################
+
+def gen_poly(w, h, c=0):
+  if c == 0:
+    c = max(w, h)
+  x = [randrange(w + 1) for _ in range(c)]
+  y = [randrange(h + 1) for _ in range(c)]
+  
+  while True:
+    intersects = []
+
+    for i in range(c - 1):
+      for j in range(i + 2, c):
+        if i == 0 and j == c - 1:
+          continue
+        i1, j1 = i + 1, (j + 1) % c
+        p1 = (x[i], y[i])
+        p2 = (x[i1], y[i1])
+        p3 = (x[j], y[j])
+        p4 = (x[j1], y[j1])
+        
+        if j - i == 2 and (p2 == p3 or p1 == p4):
+          continue
+        if intersect(p1, p2, p3, p4):
+          intersects.append((i, j))
+      
+    if intersects == []:
+      break
+
+    if len(intersects) == 1:
+      sx, sy = intersects[0]
+      sx1, sy1 = (sx + 1), (sy + 1) % c
+      p1 = (x[sx], y[sx])
+      p2 = (x[sx1], y[sx1])
+      p3 = (x[sy], y[sy])
+      p4 = (x[sy1], y[sy1])
+
+      if p2 == p3 or p1 == p4:
+        break
+
+    sx, sy = choice(intersects)
+
+    x[sx + 1:sy + 1] = x[sy:sx:-1]
+    y[sx + 1:sy + 1] = y[sy:sx:-1]
+
+  res = []
+
+  for i in range(c):
+    p = (x[i] * TILE_SIZE, y[i] * TILE_SIZE)
+    if len(res) > 1 and orientation(res[-2], res[-1], p) == 0:
+      res.pop()
+    res.append(p)
+  
+  if len(res) > 2 and orientation(res[-1], res[0], res[1]) == 0:
+    res.pop(0)
+
+  res.append(res[0])
+  
+  return res
+
 # Events ######################################################################
 
 def reset():
@@ -528,37 +591,48 @@ def edit_points():
 
 
 def save_map():
-    if not path.exists('maps'):
-        mkdir('maps')
-    name = "maps/" + map_name.get() + ".mp"
-    with open(name, 'w') as f:
-        for point in map:
-            x, y = point
-            f.write(f"{x // TILE_SIZE} {y // TILE_SIZE}\n")
+    global state
+    if state == State.IDLE:
+        if not path.exists('maps'):
+            mkdir('maps')
+        name = "maps/" + map_name.get() + ".mp"
+        with open(name, 'w') as f:
+            for point in map:
+                x, y = point
+                f.write(f"{x // TILE_SIZE} {y // TILE_SIZE}\n")
 
 
 def load_map():
-    global start_pos, end_pos
-    if not path.exists('maps'):
-        mkdir('maps')
+    global state
+    if state == State.IDLE:
+        if not path.exists('maps'):
+            mkdir('maps')
 
-    name = "maps/" + map_name.get() + ".mp"
-    map.clear()
-    reset()
-    with open(name, 'r') as f:
-        for line in f.readlines():
-            x, y = (int(i) for i in line.split())
-            map.append((x * TILE_SIZE, y * TILE_SIZE))
-        generate_graph()
+        name = "maps/" + map_name.get() + ".mp"
+        map.clear()
+        reset()
+        with open(name, 'r') as f:
+            for line in f.readlines():
+                x, y = (int(i) for i in line.split())
+                map.append((x * TILE_SIZE, y * TILE_SIZE))
+            generate_graph()
 
 
 def edit_map():
-    global state, start_pos, end_pos
-    reset()
+    global state
     if state == State.IDLE:
+        reset()
         if map:
             map.pop()
         state = State.EDIT_MAP
+
+
+def random_map():
+    global state, map
+    if state == State.IDLE:
+        reset()
+        map = gen_poly(MAP_WIDTH, MAP_HEIGHT)
+        generate_graph()
 
 # Entrypoint ##################################################################
 
