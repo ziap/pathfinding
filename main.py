@@ -5,7 +5,7 @@ from tkinter import font
 
 from time import perf_counter
 from math import sqrt, inf
-from random import randrange, choice
+from random import randrange
 
 from os import path, mkdir
 
@@ -35,7 +35,7 @@ HEIGHT     = 768
 INF        = inf
 PADDING    = 2.5
 DOT_RADIUS = 5
-TILE_SIZE  = 16
+TILE_SIZE  = 32
 FONT_SIZE  = 10
 LINE_WIDTH = 3
 
@@ -117,6 +117,7 @@ def run():
     time_label = tk.StringVar(value="Time: ...")
     tk.Label(result_menu, textvariable=time_label, font=NORMAL_FONT).pack(side=tk.LEFT, padx=PADDING)
 
+    render()
     window.mainloop()
 
 # Rendering ###################################################################
@@ -216,6 +217,7 @@ def draw_cursor(x, y):
 
 # Geometry ####################################################################
 
+
 def orientation(a, b, c):
     xa, ya = a
     xb, yb = b
@@ -253,7 +255,6 @@ def intersect(p1, q1, p2, q2):
         return True
 
     return False
-
 
 def in_polygon(x, y):
     inside = False
@@ -307,10 +308,8 @@ def add_edge(idx1, idx2, pos1, pos2, rev):
 
             graph[idx2][idx1] = w
 
-
 def generate_graph():
     global graph
-
     graph = {}
     
     for i in range(len(map) - 1):
@@ -427,70 +426,86 @@ def pathfind():
 
 # Random map generation #######################################################
 
-def gen_poly(w, h, c=0):
-    if c == 0:
-        c = w * h // 25
 
-    # Create set of random points
-    x = [randrange(w + 1) for _ in range(c)]
-    y = [randrange(h + 1) for _ in range(c)]
+def shuffle(a):
+  for i in range(len(a)):
+    idx = randrange(len(a))
+    a[i], a[idx] = a[idx], a[i]
+
+
+def gen_poly(w, h, d=0.2):
+  c = int((w - 1) * (h - 1) * d * d)
+
+  vl = [(i, j) for i in range(1, w) for j in range(1, h)]
+  shuffle(vl)
+  vl = vl[:c]
+
+  x = [i[0] for i in vl]
+  y = [i[1] for i in vl]
   
-    while True:
-        # Get a random pair of intersecting edge
-        # NOTE: switch to first pair may improve performance
-        intersects = []
+  while True:
+    sx, sy = 0, 0
+    found = False
 
-        for i in range(c - 1):
-            for j in range(i + 2, c):
-                if i == 0 and j == c - 1:
-                    continue
-                i1, j1 = i + 1, (j + 1) % c
-                p1 = (x[i], y[i])
-                p2 = (x[i1], y[i1])
-                p3 = (x[j], y[j])
-                p4 = (x[j1], y[j1])
-                
-                if j - i == 2 and (p2 == p3 or p1 == p4):
-                    continue
-                if intersect(p1, p2, p3, p4):
-                    intersects.append((i, j))
+    for i in range(c - 1):
+      if found:
+        break
+
+      for j in range(i + 2, c):
+        if i == 0 and j == c - 1:
+          continue
+        i1, j1 = i + 1, (j + 1) % c
+        p1 = (x[i], y[i])
+        p2 = (x[i1], y[i1])
+        p3 = (x[j], y[j])
+        p4 = (x[j1], y[j1])
         
-        if intersects == []:
+        if intersect(p1, p2, p3, p4):
+          sx, sy = i, j
+          found = True
           break
-        
-        # The final pair can have a common vertex
-        if len(intersects) == 1:
-          sx, sy = intersects[0]
-          sx1, sy1 = (sx + 1), (sy + 1) % c
-          p1 = (x[sx], y[sx])
-          p2 = (x[sx1], y[sx1])
-          p3 = (x[sy], y[sy])
-          p4 = (x[sy1], y[sy1])
+      
+    if not found:
+      break
 
-          if p2 == p3 or p1 == p4:
-            break
+    p1 = (x[sx], y[sx])
+    p2 = (x[sx + 1], y[sx + 1])
+    p3 = (x[sy], y[sy])
+    p4 = (x[(sy + 1) % c], y[(sy + 1) % c])
 
-        sx, sy = choice(intersects)
+    if orientation(p3, p1, p4) == orientation(p3, p2, p4) == 0 and on_segment(p3, p1, p4):
+      # Replace 1 and 3
+      x[sx], x[sy] = x[sy], x[sx]
+      y[sx], y[sy] = y[sy], y[sx]
+    elif orientation(p1, p4, p2) == orientation(p1, p3, p2) == 0 and on_segment(p1, p4, p2):
+      # Replace 2 and 4
+      pt = (x[(sy + 2) % c], y[(sy + 2) % c])
+      while (sy + 1) % c != sx and orientation(p1, pt, p2) == 0 and on_segment(p1, pt, p2):
+        p3 = p4
+        p4 = pt
+        sy = (sy + 1) % c
+        pt = (x[(sy + 2) % c], y[(sy + 2) % c])
+      x[sx + 1], x[(sy + 1) % c] = x[(sy + 1) % c], x[sx + 1]
+      y[sx + 1], y[(sy + 1) % c] = y[(sy + 1) % c], y[sx + 1]
+    else:
+      # Replace 2 and 3
+      x[sx + 1:sy + 1] = x[sy:sx:-1]
+      y[sx + 1:sy + 1] = y[sy:sx:-1]
 
-        # Fix the self-intersection 
-        x[sx + 1:sy + 1] = x[sy:sx:-1]
-        y[sx + 1:sy + 1] = y[sy:sx:-1]
+  res = []
 
-    res = []
+  for i in range(c):
+    p = (x[i] * TILE_SIZE, y[i] * TILE_SIZE)
+    if len(res) > 1 and orientation(res[-2], res[-1], p) == 0:
+      res.pop()
+    res.append(p)
+  
+  if len(res) > 2 and orientation(res[-1], res[0], res[1]) == 0:
+    res.pop(0)
 
-    # Remove colinear adjacent edges
-    for i in range(c):
-        p = (x[i] * TILE_SIZE, y[i] * TILE_SIZE)
-        if len(res) > 1 and orientation(res[-2], res[-1], p) == 0:
-          res.pop()
-        res.append(p)
+  res.append(res[0])
 
-    if len(res) > 2 and orientation(res[-1], res[0], res[1]) == 0:
-        res.pop(0)
-
-    res.append(res[0])
-
-    return res
+  return res
 
 # Events ######################################################################
 
@@ -573,6 +588,7 @@ def canvas_click(e):
 
                             map.append(map[0])
                             state = State.IDLE
+                            global graph
                             generate_graph()
                         else:
                             map.append(tiled_pos)
@@ -611,7 +627,7 @@ def save_map():
 
 
 def load_map():
-    global state
+    global state, graph
     if state == State.IDLE:
         if not path.exists('maps'):
             mkdir('maps')
@@ -624,6 +640,7 @@ def load_map():
                 x, y = (int(i) for i in line.split())
                 map.append((x * TILE_SIZE, y * TILE_SIZE))
             generate_graph()
+            render()
 
 
 def edit_map():
@@ -636,11 +653,12 @@ def edit_map():
 
 
 def random_map():
-    global state, map
+    global state, map, graph
     if state == State.IDLE:
         reset()
-        map = gen_poly(MAP_WIDTH, MAP_HEIGHT)
+        map = gen_poly(MAP_WIDTH, MAP_HEIGHT, 0.4)
         generate_graph()
+        render()
 
 # Entrypoint ##################################################################
 
