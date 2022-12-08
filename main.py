@@ -9,18 +9,15 @@ from random import randrange
 
 from os import path, mkdir
 
-from enum import Enum
-from types import SimpleNamespace
-
 # Configurations ##############################################################
 
-class State(Enum):
+class State:
     IDLE = 0
     EDIT_START = 1
     EDIT_END = 2
     EDIT_MAP = 3
 
-class Color(SimpleNamespace):
+class Color:
     START   = '#16a34a'
     END     = '#dc2626'
     GRID    = '#d4d4d4'
@@ -29,11 +26,10 @@ class Color(SimpleNamespace):
     MAP     = '#2563eb'
     PREVIEW = '#475569'
 
-
 WIDTH      = 1024
 HEIGHT     = 768
 INF        = inf
-PADDING    = 2.5
+PADDING    = 10
 DOT_RADIUS = 5
 TILE_SIZE  = 32
 FONT_SIZE  = 10
@@ -61,61 +57,61 @@ def run():
 
     global NORMAL_FONT, BOLD_FONT
     NORMAL_FONT = font.Font(size=FONT_SIZE, weight='normal')
-    BOLD_FONT   = font.Font(size=FONT_SIZE, weight='bold')
+    BOLD_FONT     = font.Font(size=FONT_SIZE, weight='bold')
 
-    root = tk.Frame(window).pack(padx=PADDING, pady=PADDING)
+    root = tk.Frame(window).pack()
 
     config_menu = tk.Frame(root)
-    config_menu.pack(padx=PADDING, pady=PADDING, fill='x')
+    config_menu.pack(padx=PADDING / 2, pady=PADDING, fill='x')
 
     map_menu = tk.Frame(config_menu)
     map_menu.pack(side=tk.LEFT, expand=1, anchor='w')
 
     global map_name
     map_name = tk.StringVar()
-    tk.Entry(map_menu, textvariable=map_name).pack(side=tk.LEFT, padx=PADDING)
+    tk.Entry(map_menu, textvariable=map_name).pack(side=tk.LEFT, padx=PADDING / 2)
 
-    tk.Button(map_menu, text='Save', font=NORMAL_FONT, command=save_map).pack(side=tk.LEFT, padx=PADDING)
-    tk.Button(map_menu, text='Load', font=NORMAL_FONT, command=load_map).pack(side=tk.LEFT, padx=PADDING)
-    tk.Button(map_menu, text='Edit', font=NORMAL_FONT, command=edit_map).pack(side=tk.LEFT, padx=PADDING)
-    tk.Button(map_menu, text='Random', font=NORMAL_FONT, command=random_map).pack(side=tk.LEFT, padx=PADDING)
+    tk.Button(map_menu, text='Save', font=NORMAL_FONT, command=save_map).pack(side=tk.LEFT, padx=PADDING / 2)
+    tk.Button(map_menu, text='Load', font=NORMAL_FONT, command=load_map).pack(side=tk.LEFT, padx=PADDING / 2)
+    tk.Button(map_menu, text='Edit', font=NORMAL_FONT, command=edit_map).pack(side=tk.LEFT, padx=PADDING / 2)
+    tk.Button(map_menu, text='Random', font=NORMAL_FONT, command=random_map).pack(side=tk.LEFT, padx=PADDING / 2)
 
     points_menu = tk.Frame(config_menu)
     points_menu.pack(side=tk.LEFT, expand=1, anchor='e')
 
-    tk.Button(points_menu, text="Edit", font=NORMAL_FONT, command=edit_points).pack(side=tk.LEFT, padx=PADDING)
+    tk.Button(points_menu, text="Edit", font=NORMAL_FONT, command=edit_points).pack(side=tk.LEFT, padx=PADDING / 2)
 
     global start_label
     start_label = tk.Label(points_menu, text="start = {...; ...}", font=NORMAL_FONT)
-    start_label.pack(side=tk.LEFT, padx=PADDING)
+    start_label.pack(side=tk.LEFT, padx=PADDING / 2)
 
     global end_label
     end_label = tk.Label(points_menu, text="end = {...; ...}", font=NORMAL_FONT)
-    end_label.pack(side=tk.LEFT, padx=PADDING)
+    end_label.pack(side=tk.LEFT, padx=PADDING / 2)
 
     global canvas
     canvas = tk.Canvas(root, bg="#ffffff", width=WIDTH, height=HEIGHT)
     canvas.config(cursor='none')
-    canvas.pack(padx=PADDING, pady=PADDING)
+    canvas.pack(padx=PADDING)
 
     canvas.bind('<Motion>', canvas_motion)
     canvas.bind('<Button-1>', canvas_click)
 
     result_menu = tk.Frame(root)
-    result_menu.pack(padx=PADDING, pady=PADDING, side=tk.LEFT, anchor='w')
+    result_menu.pack(padx=PADDING / 2, pady=PADDING, side=tk.LEFT, anchor='w')
 
     global show_graph
     show_graph = tk.BooleanVar()
     show_graph.trace_add("write", lambda *_: render())
-    tk.Checkbutton(result_menu, text="Show graph", variable=show_graph, onvalue=True, offvalue=False).pack(side=tk.RIGHT, padx=PADDING)
+    tk.Checkbutton(result_menu, text="Show graph", variable=show_graph, onvalue=True, offvalue=False).pack(side=tk.RIGHT, padx=PADDING / 2)
 
     global distance_label
     distance_label = tk.StringVar(value="Distance: ...")
-    tk.Label(result_menu, textvariable=distance_label, font=NORMAL_FONT).pack(side=tk.LEFT, padx=PADDING)
+    tk.Label(result_menu, textvariable=distance_label, font=NORMAL_FONT).pack(side=tk.LEFT, padx=PADDING / 2)
 
     global time_label
     time_label = tk.StringVar(value="Time: ...")
-    tk.Label(result_menu, textvariable=time_label, font=NORMAL_FONT).pack(side=tk.LEFT, padx=PADDING)
+    tk.Label(result_menu, textvariable=time_label, font=NORMAL_FONT).pack(side=tk.LEFT, padx=PADDING / 2)
 
     render()
     window.mainloop()
@@ -130,7 +126,7 @@ def draw_dot(pos, color):
     dot_end_y = pos[1] + DOT_RADIUS
 
     canvas.create_oval(dot_start_x, dot_start_y, dot_end_x, dot_end_y,
-                       fill=color, outline='')
+                         fill=color, outline='')
 
 
 def align_point(x, y):
@@ -156,11 +152,11 @@ def render():
     # Draw the grid
     for i in range(MAP_WIDTH + 1):
         canvas.create_line(i * TILE_SIZE, 0, i * TILE_SIZE, HEIGHT,
-                           fill=Color.GRID)
+                             fill=Color.GRID)
 
     for i in range(MAP_HEIGHT + 1):
         canvas.create_line(0, i * TILE_SIZE, WIDTH, i * TILE_SIZE,
-                           fill=Color.GRID)
+                             fill=Color.GRID)
 
     # Draw the graph
     if state != State.EDIT_MAP and show_graph.get():
@@ -199,9 +195,9 @@ def draw_cursor(x, y):
         dot_color = Color.PREVIEW
         if map:
             canvas.create_line(map[0], tiled_pos, fill=Color.PREVIEW,
-                               width=LINE_WIDTH)
+                                 width=LINE_WIDTH)
             canvas.create_line(map[-1], tiled_pos, fill=Color.PREVIEW,
-                               width=LINE_WIDTH)
+                                 width=LINE_WIDTH)
 
             if len(map) > 2 and tiled_pos == map[0]:
                 draw_dot(tiled_pos, Color.START)
@@ -352,10 +348,10 @@ def pathfind():
         add_edge(i, -2, p, end_pos, False)
     add_edge(-1, -2, start_pos, end_pos, False)
 
-    g = [INF] * n  # g(x) = smallest distance from start to x
-    h = [0.0] * n  # h(x) = estimated cost to travel from x to end
-    f = [INF] * n  # f(x) = g(x) + h(x)
-    p = [-3] * n   # the parent of a node in the final path
+    g = [INF] * n    # g(x) = smallest distance from start to x
+    h = [0.0] * n    # h(x) = estimated cost to travel from x to end
+    f = [INF] * n    # f(x) = g(x) + h(x)
+    p = [-3] * n     # the parent of a node in the final path
 
     # Use euclidean distance to calculate h(x)
     for i in range(n):
@@ -428,84 +424,84 @@ def pathfind():
 
 
 def shuffle(a):
-  for i in range(len(a)):
-    idx = randrange(len(a))
-    a[i], a[idx] = a[idx], a[i]
+    for i in range(len(a)):
+        idx = randrange(len(a))
+        a[i], a[idx] = a[idx], a[i]
 
 
 def gen_poly(w, h, d=0.2):
-  c = int((w - 1) * (h - 1) * d * d)
+    c = int((w - 1) * (h - 1) * d * d)
 
-  vl = [(i, j) for i in range(1, w) for j in range(1, h)]
-  shuffle(vl)
-  vl = vl[:c]
+    vl = [(i, j) for i in range(1, w) for j in range(1, h)]
+    shuffle(vl)
+    vl = vl[:c]
 
-  x = [i[0] for i in vl]
-  y = [i[1] for i in vl]
-  
-  while True:
-    sx, sy = 0, 0
-    found = False
+    x = [i[0] for i in vl]
+    y = [i[1] for i in vl]
+    
+    while True:
+        sx, sy = 0, 0
+        found = False
 
-    for i in range(c - 1):
-      if found:
-        break
+        for i in range(c - 1):
+            if found:
+                break
 
-      for j in range(i + 2, c):
-        if i == 0 and j == c - 1:
-          continue
-        i1, j1 = i + 1, (j + 1) % c
-        p1 = (x[i], y[i])
-        p2 = (x[i1], y[i1])
-        p3 = (x[j], y[j])
-        p4 = (x[j1], y[j1])
-        
-        if intersect(p1, p2, p3, p4):
-          sx, sy = i, j
-          found = True
-          break
-      
-    if not found:
-      break
+            for j in range(i + 2, c):
+                if i == 0 and j == c - 1:
+                    continue
+                i1, j1 = i + 1, (j + 1) % c
+                p1 = (x[i], y[i])
+                p2 = (x[i1], y[i1])
+                p3 = (x[j], y[j])
+                p4 = (x[j1], y[j1])
+                
+                if intersect(p1, p2, p3, p4):
+                    sx, sy = i, j
+                    found = True
+                    break
+            
+        if not found:
+            break
 
-    p1 = (x[sx], y[sx])
-    p2 = (x[sx + 1], y[sx + 1])
-    p3 = (x[sy], y[sy])
-    p4 = (x[(sy + 1) % c], y[(sy + 1) % c])
+        p1 = (x[sx], y[sx])
+        p2 = (x[sx + 1], y[sx + 1])
+        p3 = (x[sy], y[sy])
+        p4 = (x[(sy + 1) % c], y[(sy + 1) % c])
 
-    if orientation(p3, p1, p4) == orientation(p3, p2, p4) == 0 and on_segment(p3, p1, p4):
-      # Replace 1 and 3
-      x[sx], x[sy] = x[sy], x[sx]
-      y[sx], y[sy] = y[sy], y[sx]
-    elif orientation(p1, p4, p2) == orientation(p1, p3, p2) == 0 and on_segment(p1, p4, p2):
-      # Replace 2 and 4
-      pt = (x[(sy + 2) % c], y[(sy + 2) % c])
-      while (sy + 1) % c != sx and orientation(p1, pt, p2) == 0 and on_segment(p1, pt, p2):
-        p3 = p4
-        p4 = pt
-        sy = (sy + 1) % c
-        pt = (x[(sy + 2) % c], y[(sy + 2) % c])
-      x[sx + 1], x[(sy + 1) % c] = x[(sy + 1) % c], x[sx + 1]
-      y[sx + 1], y[(sy + 1) % c] = y[(sy + 1) % c], y[sx + 1]
-    else:
-      # Replace 2 and 3
-      x[sx + 1:sy + 1] = x[sy:sx:-1]
-      y[sx + 1:sy + 1] = y[sy:sx:-1]
+        if orientation(p3, p1, p4) == orientation(p3, p2, p4) == 0 and on_segment(p3, p1, p4):
+            # Replace 1 and 3
+            x[sx], x[sy] = x[sy], x[sx]
+            y[sx], y[sy] = y[sy], y[sx]
+        elif orientation(p1, p4, p2) == orientation(p1, p3, p2) == 0 and on_segment(p1, p4, p2):
+            # Replace 2 and 4
+            pt = (x[(sy + 2) % c], y[(sy + 2) % c])
+            while (sy + 1) % c != sx and orientation(p1, pt, p2) == 0 and on_segment(p1, pt, p2):
+                p3 = p4
+                p4 = pt
+                sy = (sy + 1) % c
+                pt = (x[(sy + 2) % c], y[(sy + 2) % c])
+            x[sx + 1], x[(sy + 1) % c] = x[(sy + 1) % c], x[sx + 1]
+            y[sx + 1], y[(sy + 1) % c] = y[(sy + 1) % c], y[sx + 1]
+        else:
+            # Replace 2 and 3
+            x[sx + 1:sy + 1] = x[sy:sx:-1]
+            y[sx + 1:sy + 1] = y[sy:sx:-1]
 
-  res = []
+    res = []
 
-  for i in range(c):
-    p = (x[i] * TILE_SIZE, y[i] * TILE_SIZE)
-    if len(res) > 1 and orientation(res[-2], res[-1], p) == 0:
-      res.pop()
-    res.append(p)
-  
-  if len(res) > 2 and orientation(res[-1], res[0], res[1]) == 0:
-    res.pop(0)
+    for i in range(c):
+        p = (x[i] * TILE_SIZE, y[i] * TILE_SIZE)
+        if len(res) > 1 and orientation(res[-2], res[-1], p) == 0:
+            res.pop()
+        res.append(p)
+    
+    if len(res) > 2 and orientation(res[-1], res[0], res[1]) == 0:
+        res.pop(0)
 
-  res.append(res[0])
+    res.append(res[0])
 
-  return res
+    return res
 
 # Events ######################################################################
 
@@ -545,7 +541,7 @@ def canvas_click(e):
     if state == State.EDIT_START and in_polygon(e.x, e.y):
         start_pos = (e.x, e.y)
         start_label.config(text=display_pos(start_pos, "start"),
-                           font=NORMAL_FONT)
+                             font=NORMAL_FONT)
         end_label.config(text="end = {...; ...}", font=BOLD_FONT)
         end_label.cget('font')
         state = State.EDIT_END
