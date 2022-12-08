@@ -20,10 +20,11 @@ class State:
 class Color:
     START   = '#16a34a'
     END     = '#dc2626'
-    GRID    = '#d4d4d4'
+    GRID    = '#a3a3a3'
     CURSOR  = '#000000'
     LINE    = '#facc15'
     MAP     = '#2563eb'
+    POLYGON = '#bfdbfe'
     PREVIEW = '#475569'
 
 WIDTH      = 1024
@@ -148,6 +149,9 @@ def draw_lines(points, fill, width):
 def render():
     global start_pos, end_pos
     canvas.delete("all")
+
+    if state != State.EDIT_MAP and len(map) > 0:
+        canvas.create_polygon(sum([[i[0], i[1]] for i in map], []), fill=Color.POLYGON)
 
     # Draw the grid
     for i in range(MAP_WIDTH + 1):
