@@ -7,6 +7,8 @@ from time import perf_counter
 from math import sqrt, inf
 from random import randrange
 
+from queue import PriorityQueue
+
 from os import path, mkdir
 
 # Configurations ##############################################################
@@ -364,7 +366,7 @@ def pathfind():
         h[i] = sqrt(dx * dx + dy * dy)
 
     # NOTE: switch to a binary heap to improve performance
-    open = [False] * n
+    open = PriorityQueue()
 
     g_end = INF
     p_end = -3
@@ -378,22 +380,18 @@ def pathfind():
                 g[neighbor] = dist
                 f[neighbor] = dist + h[neighbor]
                 p[neighbor] = -1
-                open[neighbor] = True
+                open.put((f[neighbor], neighbor))
         else:
             if graph[-1][-2] < g_end:
                 g_end = graph[-1][-2]
                 open_end = True
                 p_end = -1
-    while True:
-        v = -1
-        for i in range(n):
-            if open[i] and (v == -1 or f[i] < f[v]):
-                v = i
-        
-        if open_end and g_end < f[v]:
-            break
 
-        open[v] = False
+    while True:
+        f_v, v = open.get()
+        
+        if open_end and g_end < f_v:
+            break
 
         for neighbor in graph[v]:
             dist = g[v] + graph[v][neighbor]
@@ -402,7 +400,7 @@ def pathfind():
                     g[neighbor] = dist
                     f[neighbor] = dist + h[neighbor]
                     p[neighbor] = v
-                    open[neighbor] = True
+                    open.put((f[neighbor], neighbor))
             else:
                 if dist < g_end:
                     g_end = dist
