@@ -53,7 +53,7 @@ state = State.IDLE
 
 # Tkinter widgets #############################################################
 
-def run():
+def App():
     window = tk.Tk(className="pathfinding")
     window.title("Pathfinding")
     window.resizable(False, False)
@@ -116,20 +116,20 @@ def run():
     time_label = tk.StringVar(value="Time: ...")
     tk.Label(result_menu, textvariable=time_label, font=NORMAL_FONT).pack(side=tk.LEFT, padx=PADDING / 2)
 
+    init_shapes()
     render()
-    window.mainloop()
+    return window
 
 # Rendering ###################################################################
 
-def draw_dot(pos, color):
+def draw_dot(pos, color, tag):
     dot_start_x = pos[0] - DOT_RADIUS
     dot_start_y = pos[1] - DOT_RADIUS
 
     dot_end_x = pos[0] + DOT_RADIUS
     dot_end_y = pos[1] + DOT_RADIUS
 
-    canvas.create_oval(dot_start_x, dot_start_y, dot_end_x, dot_end_y,
-                         fill=color, outline='')
+    canvas.create_oval(dot_start_x, dot_start_y, dot_end_x, dot_end_y, fill=color, outline='', tags=tag)
 
 
 def align_point(x, y):
@@ -138,33 +138,38 @@ def align_point(x, y):
     return aligned_x, aligned_y
 
 
-def draw_lines(points, fill, width):
+def draw_lines(points, fill, width, tag):
+    canvas.delete(tag)
     last = ()
     for point in points:
-        draw_dot(point, fill)
+        draw_dot(point, fill, tag)
         if last:
-            canvas.create_line(last, point, fill=fill, width=width)
+            canvas.create_line(last, point, fill=fill, width=width, tags=tag)
 
         last = point
 
 
-def render():
-    global start_pos, end_pos
-    canvas.delete("all")
-
-    if state != State.EDIT_MAP and len(map) > 0:
-        canvas.create_polygon(sum([[i[0], i[1]] for i in map], []), fill=Color.POLYGON)
+def init_shapes():
+    global poly
+    poly = canvas.create_polygon([0, 0], fill=Color.POLYGON, outline='')
 
     # Draw the grid
     for i in range(MAP_WIDTH + 1):
-        canvas.create_line(i * TILE_SIZE, 0, i * TILE_SIZE, HEIGHT,
-                             fill=Color.GRID)
+        canvas.create_line(i * TILE_SIZE, 0, i * TILE_SIZE, HEIGHT, fill=Color.GRID)
 
     for i in range(MAP_HEIGHT + 1):
-        canvas.create_line(0, i * TILE_SIZE, WIDTH, i * TILE_SIZE,
-                             fill=Color.GRID)
+        canvas.create_line(0, i * TILE_SIZE, WIDTH, i * TILE_SIZE, fill=Color.GRID)
 
-    # Draw the graph
+
+def render():
+    global start_pos, end_pos, poly
+
+    if state != State.EDIT_MAP and len(map) > 0:
+        canvas.coords(poly, sum([[i[0], i[1]] for i in map], []))
+    else:
+        canvas.coords(poly, [0, 0])
+
+    canvas.delete('graph')
     if state != State.EDIT_MAP and show_graph.get():
         for e1 in graph:
             pos1 = start_pos if e1 == -1 else end_pos if e1 == -2 else map[e1]
@@ -173,21 +178,21 @@ def render():
                     pos2 = start_pos if e2 == -1 else end_pos if e2 == -2 else map[e2]
                     
                     if pos1 and pos2:
-                        canvas.create_line(pos1, pos2, fill=Color.PREVIEW)
+                        canvas.create_line(pos1, pos2, fill=Color.PREVIEW, tags='graph')
                         
-    draw_lines(map, Color.MAP, LINE_WIDTH)
+    draw_lines(map, Color.MAP, LINE_WIDTH, 'map_outline')
 
-    # Draw the computed path
-    draw_lines(result_path, Color.LINE, LINE_WIDTH)
+    draw_lines(result_path, Color.LINE, LINE_WIDTH, 'result_path')
 
-    # Place the start and end dots
+    canvas.delete('start-end')
     if start_pos:
-        draw_dot(start_pos, Color.START)
+        draw_dot(start_pos, Color.START, 'start-end')
     if end_pos:
-        draw_dot(end_pos, Color.END)
+        draw_dot(end_pos, Color.END, 'start-end')
 
 
 def draw_cursor(x, y):
+    canvas.delete("cursor")
     if state == State.IDLE:
         dot_color = Color.CURSOR
     elif state == State.EDIT_START:
@@ -201,21 +206,21 @@ def draw_cursor(x, y):
         dot_color = Color.PREVIEW
         if map:
             canvas.create_line(map[0], tiled_pos, fill=Color.PREVIEW,
-                                 width=LINE_WIDTH)
+                                 width=LINE_WIDTH, tags='cursor')
             canvas.create_line(map[-1], tiled_pos, fill=Color.PREVIEW,
-                                 width=LINE_WIDTH)
+                                 width=LINE_WIDTH, tags='cursor')
 
             if len(map) > 2 and tiled_pos == map[0]:
-                draw_dot(tiled_pos, Color.START)
+                draw_dot(tiled_pos, Color.START, 'cursor')
             elif tiled_pos in map:
-                draw_dot(tiled_pos, Color.END)
+                draw_dot(tiled_pos, Color.END, 'cursor')
             else:
-                draw_dot(tiled_pos, Color.PREVIEW)
+                draw_dot(tiled_pos, Color.PREVIEW, 'cursor')
         else:
-            draw_dot(tiled_pos, Color.PREVIEW)
+            draw_dot(tiled_pos, Color.PREVIEW, 'cursor')
     else:
         raise Exception('Unreachable')
-    draw_dot((x, y), dot_color)
+    draw_dot((x, y), dot_color, 'cursor')
 
 # Geometry ####################################################################
 
@@ -257,6 +262,7 @@ def intersect(p1, q1, p2, q2):
         return True
 
     return False
+
 
 def in_polygon(x, y):
     inside = False
@@ -309,6 +315,7 @@ def add_edge(idx1, idx2, pos1, pos2, rev):
                 graph[idx2] = {}
 
             graph[idx2][idx1] = w
+
 
 def generate_graph():
     global graph
@@ -424,7 +431,6 @@ def pathfind():
 
 # Random map generation #######################################################
 
-
 def shuffle(a):
     for i in range(len(a)):
         idx = randrange(len(a))
@@ -534,7 +540,6 @@ def canvas_motion(e):
         end_pos = (e.x, e.y)
         end_label.config(text=display_pos(end_pos, "end"), font=BOLD_FONT)
 
-    render()
     draw_cursor(e.x, e.y)
 
 
@@ -598,7 +603,6 @@ def canvas_click(e):
     render()
     draw_cursor(e.x, e.y)
 
-
 def edit_points():
     global start_pos, end_pos, state, result_path
     if state == State.IDLE and len(map) > 3:
@@ -648,6 +652,7 @@ def edit_map():
         if map:
             map.pop()
         state = State.EDIT_MAP
+        render()
 
 
 def random_map():
@@ -661,4 +666,4 @@ def random_map():
 # Entrypoint ##################################################################
 
 if __name__ == "__main__":
-    run()
+    App().mainloop()
