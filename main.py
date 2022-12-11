@@ -28,6 +28,7 @@ class Color:
     MAP     = '#2563eb'
     POLYGON = '#bfdbfe'
     PREVIEW = '#475569'
+    GRAPH   = '#60a5fa'
 
 WIDTH      = 1024
 HEIGHT     = 768
@@ -36,7 +37,6 @@ PADDING    = 10
 DOT_RADIUS = 5
 TILE_SIZE  = 32
 FONT_SIZE  = 10
-LINE_WIDTH = 3
 
 MAP_WIDTH  = WIDTH // TILE_SIZE
 MAP_HEIGHT = HEIGHT // TILE_SIZE
@@ -155,10 +155,10 @@ def init_shapes():
 
     # Draw the grid
     for i in range(MAP_WIDTH + 1):
-        canvas.create_line(i * TILE_SIZE, 0, i * TILE_SIZE, HEIGHT, fill=Color.GRID)
+        canvas.create_line(i * TILE_SIZE, 0, i * TILE_SIZE, HEIGHT, width=1, fill=Color.GRID)
 
     for i in range(MAP_HEIGHT + 1):
-        canvas.create_line(0, i * TILE_SIZE, WIDTH, i * TILE_SIZE, fill=Color.GRID)
+        canvas.create_line(0, i * TILE_SIZE, WIDTH, i * TILE_SIZE, width=1, fill=Color.GRID)
 
 
 def render():
@@ -178,11 +178,11 @@ def render():
                     pos2 = start_pos if e2 == -1 else end_pos if e2 == -2 else map[e2]
                     
                     if pos1 and pos2:
-                        canvas.create_line(pos1, pos2, fill=Color.PREVIEW, tags='graph')
+                        canvas.create_line(pos1, pos2, fill=Color.GRAPH, width=1, tags='graph')
                         
-    draw_lines(map, Color.MAP, LINE_WIDTH, 'map_outline')
+    draw_lines(map, Color.MAP, 3, 'map_outline')
 
-    draw_lines(result_path, Color.LINE, LINE_WIDTH, 'result_path')
+    draw_lines(result_path, Color.LINE, 3, 'result_path')
 
     canvas.delete('start-end')
     if start_pos:
@@ -206,9 +206,9 @@ def draw_cursor(x, y):
         dot_color = Color.PREVIEW
         if map:
             canvas.create_line(map[0], tiled_pos, fill=Color.PREVIEW,
-                                 width=LINE_WIDTH, tags='cursor')
+                                 width=3, tags='cursor')
             canvas.create_line(map[-1], tiled_pos, fill=Color.PREVIEW,
-                                 width=LINE_WIDTH, tags='cursor')
+                                 width=3, tags='cursor')
 
             if len(map) > 2 and tiled_pos == map[0]:
                 draw_dot(tiled_pos, Color.START, 'cursor')
