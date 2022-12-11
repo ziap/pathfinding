@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!.venv/bin/python
 
 import tkinter as tk
 from tkinter import font
