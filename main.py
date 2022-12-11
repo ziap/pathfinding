@@ -8,6 +8,7 @@ from math import sqrt, inf
 from random import randrange
 
 from queue import PriorityQueue
+from numba import njit
 
 from os import path, mkdir
 
@@ -205,10 +206,8 @@ def draw_cursor(x, y):
         tiled_pos = (x_tiled, y_tiled)
         dot_color = Color.PREVIEW
         if map:
-            canvas.create_line(map[0], tiled_pos, fill=Color.PREVIEW,
-                                 width=3, tags='cursor')
-            canvas.create_line(map[-1], tiled_pos, fill=Color.PREVIEW,
-                                 width=3, tags='cursor')
+            canvas.create_line(map[0], tiled_pos, fill=Color.PREVIEW, width=3, tags='cursor')
+            canvas.create_line(map[-1], tiled_pos, fill=Color.PREVIEW, width=3, tags='cursor')
 
             if len(map) > 2 and tiled_pos == map[0]:
                 draw_dot(tiled_pos, Color.START, 'cursor')
@@ -225,6 +224,16 @@ def draw_cursor(x, y):
 # Geometry ####################################################################
 
 
+@njit
+def distance(a, b):
+    xa, ya = a
+    xb, yb = b
+    dx = xa - xb
+    dy = ya - yb
+    return sqrt(dx * dx + dy * dy)
+
+
+@njit
 def orientation(a, b, c):
     xa, ya = a
     xb, yb = b
@@ -233,6 +242,7 @@ def orientation(a, b, c):
     return 1 if val > 0 else 2 if val < 0 else 0
 
 
+@njit
 def on_segment(a, b, c):
     xa, ya = a
     xb, yb = b
@@ -240,6 +250,7 @@ def on_segment(a, b, c):
     return xb <= max(xa, xc) and xb >= min(xa, xc) and yb <= max(ya, yc) and yb >= min(ya, yc)
 
 
+@njit
 def intersect(p1, q1, p2, q2):
     o1 = orientation(p1, q1, p2)
     o2 = orientation(p1, q1, q2)
@@ -324,14 +335,7 @@ def generate_graph():
     for i in range(len(map) - 1):
         # All polygon edges are also edges of visibility graph
         j = (i + 1) % (len(map) - 1)
-        p1 = map[i]
-        q1 = map[j]
-
-        xi, yi = p1
-        xj, yj = q1
-
-        dx, dy = xj - xi, yj - yi
-        w = sqrt(dx * dx + dy * dy)
+        w = distance(map[i], map[j])
         
         if i not in graph:
             graph[i] = {}
@@ -368,9 +372,7 @@ def pathfind():
 
     # Use euclidean distance to calculate h(x)
     for i in range(n):
-        x, y = map[i] 
-        dx, dy = x - end_pos[0], y - end_pos[1]
-        h[i] = sqrt(dx * dx + dy * dy)
+        h[i] = distance(map[i], end_pos)
 
     # NOTE: switch to a binary heap to improve performance
     open = PriorityQueue()
@@ -380,14 +382,14 @@ def pathfind():
     open_end = False
 
     # Basic A* implementation
-    for neighbor in graph[-1]:
-        if neighbor != -2:
-            dist = graph[-1][neighbor]
-            if dist < g[neighbor]:
-                g[neighbor] = dist
-                f[neighbor] = dist + h[neighbor]
-                p[neighbor] = -1
-                open.put((f[neighbor], neighbor))
+    for adj in graph[-1]:
+        if adj != -2:
+            dist = graph[-1][adj]
+            if dist < g[adj]:
+                g[adj] = dist
+                f[adj] = dist + h[adj]
+                p[adj] = -1
+                open.put((f[adj], adj))
         else:
             if graph[-1][-2] < g_end:
                 g_end = graph[-1][-2]
@@ -400,14 +402,14 @@ def pathfind():
         if open_end and g_end < f_v:
             break
 
-        for neighbor in graph[v]:
-            dist = g[v] + graph[v][neighbor]
-            if neighbor != -2:
-                if dist < g[neighbor]:
-                    g[neighbor] = dist
-                    f[neighbor] = dist + h[neighbor]
-                    p[neighbor] = v
-                    open.put((f[neighbor], neighbor))
+        for adj in graph[v]:
+            dist = g[v] + graph[v][adj]
+            if adj != -2:
+                if dist < g[adj]:
+                    g[adj] = dist
+                    f[adj] = dist + h[adj]
+                    p[adj] = v
+                    open.put((f[adj], adj))
             else:
                 if dist < g_end:
                     g_end = dist
@@ -431,12 +433,14 @@ def pathfind():
 
 # Random map generation #######################################################
 
+@njit
 def shuffle(a):
     for i in range(len(a)):
         idx = randrange(len(a))
         a[i], a[idx] = a[idx], a[i]
 
 
+@njit
 def gen_poly(w, h, d=0.2):
     c = int((w - 1) * (h - 1) * d * d)
 
@@ -446,11 +450,10 @@ def gen_poly(w, h, d=0.2):
 
     x = [i[0] for i in vl]
     y = [i[1] for i in vl]
-    
-    while True:
-        sx, sy = 0, 0
-        found = False
 
+    found = True    
+    while found:
+        found = False
         for i in range(c - 1):
             if found:
                 break
@@ -463,38 +466,12 @@ def gen_poly(w, h, d=0.2):
                 p2 = (x[i1], y[i1])
                 p3 = (x[j], y[j])
                 p4 = (x[j1], y[j1])
-                
-                if intersect(p1, p2, p3, p4):
-                    sx, sy = i, j
+
+                if distance(p1, p2) + distance(p3, p4) > distance(p1, p3) + distance(p2, p4):
                     found = True
+                    x[i + 1:j + 1] = x[j:i:-1]
+                    y[i + 1:j + 1] = y[j:i:-1]
                     break
-            
-        if not found:
-            break
-
-        p1 = (x[sx], y[sx])
-        p2 = (x[sx + 1], y[sx + 1])
-        p3 = (x[sy], y[sy])
-        p4 = (x[(sy + 1) % c], y[(sy + 1) % c])
-
-        if orientation(p3, p1, p4) == orientation(p3, p2, p4) == 0 and on_segment(p3, p1, p4):
-            # Replace 1 and 3
-            x[sx], x[sy] = x[sy], x[sx]
-            y[sx], y[sy] = y[sy], y[sx]
-        elif orientation(p1, p4, p2) == orientation(p1, p3, p2) == 0 and on_segment(p1, p4, p2):
-            # Replace 2 and 4
-            pt = (x[(sy + 2) % c], y[(sy + 2) % c])
-            while (sy + 1) % c != sx and orientation(p1, pt, p2) == 0 and on_segment(p1, pt, p2):
-                p3 = p4
-                p4 = pt
-                sy = (sy + 1) % c
-                pt = (x[(sy + 2) % c], y[(sy + 2) % c])
-            x[sx + 1], x[(sy + 1) % c] = x[(sy + 1) % c], x[sx + 1]
-            y[sx + 1], y[(sy + 1) % c] = y[(sy + 1) % c], y[sx + 1]
-        else:
-            # Replace 2 and 3
-            x[sx + 1:sy + 1] = x[sy:sx:-1]
-            y[sx + 1:sy + 1] = y[sy:sx:-1]
 
     res = []
 
@@ -659,7 +636,7 @@ def random_map():
     global state, map, graph
     if state == State.IDLE:
         reset()
-        map = gen_poly(MAP_WIDTH, MAP_HEIGHT, 0.4)
+        map = gen_poly(MAP_WIDTH, MAP_HEIGHT, 0.5)
         generate_graph()
         render()
 
